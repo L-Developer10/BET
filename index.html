@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BET WARRIORS — Simulador de Apostas Fictícias</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Canvas de partículas de fundo -->
+  <canvas id="bg-particles"></canvas>
+
+  <div id="app" class="app-container">
+    
+    <!-- AVISO DE DINHEIRO FICTÍCIO -->
+    <aside class="fictional-money-banner" aria-label="Aviso Legal">
+      <span class="pulse-dot"></span>
+      <span class="banner-text">SIMULADOR ESTRATÉGICO 100% OFFLINE COM <strong>DINHEIRO FICTÍCIO</strong> — NENHUM VALOR REAL ENVOLVIDO</span>
+      <span class="badge-ficticio">MODO SIMULAÇÃO</span>
+    </aside>
+
+    <!-- CABEÇALHO / HUD PRINCIPAL -->
+    <header class="hud-header">
+      <div class="brand-section">
+        <div class="logo-wrapper" id="logo-easter-egg">
+          <span class="logo-icon">⚡</span>
+          <h1 class="logo-title">BET <span class="neon-text">WARRIORS</span></h1>
+        </div>
+        <div class="brand-sub">CAMINHO DO MILHÃO</div>
+      </div>
+
+      <!-- MÉTRICAS CENTRAIS -->
+      <div class="hud-stats-grid">
+        <!-- DIA ATUAL -->
+        <div class="hud-card day-card">
+          <div class="hud-label">FASE ATUAL</div>
+          <div class="hud-value-group">
+            <span class="hud-value day-highlight" id="hud-dia">DIA 1</span>
+            <span class="hud-sub" id="hud-dia-total">/ 10</span>
+          </div>
+        </div>
+
+        <!-- SALDO ATUAL -->
+        <div class="hud-card balance-card">
+          <div class="hud-label">SALDO FICTÍCIO</div>
+          <div class="hud-value-group">
+            <span class="hud-value neon-green" id="hud-saldo">R$ 10.000,00</span>
+          </div>
+          <div class="balance-change-indicator" id="balance-change"></div>
+        </div>
+
+        <!-- META DO DIA -->
+        <div class="hud-card target-card">
+          <div class="hud-label">META DO DIA</div>
+          <div class="hud-value-group">
+            <span class="hud-value neon-gold" id="hud-meta">R$ 10.000,00</span>
+          </div>
+          <div class="hud-sub" id="hud-falta-ou-excesso">Faltam: R$ 0,00</div>
+        </div>
+
+        <!-- CRONÔMETRO -->
+        <div class="hud-card timer-card" id="timer-box">
+          <div class="hud-label">TEMPO RESTANTE</div>
+          <div class="hud-value-group">
+            <span class="timer-icon">⏳</span>
+            <span class="hud-value timer-digits" id="hud-tempo">02:00</span>
+          </div>
+          <div class="timer-bar-wrapper">
+            <div class="timer-bar-fill" id="timer-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AÇÕES DO TOPO -->
+      <div class="hud-actions">
+        <button id="btn-sound-toggle" class="icon-btn" title="Alternar Som" aria-label="Som">
+          <span id="sound-icon">🔊</span>
+        </button>
+        <button id="btn-help" class="icon-btn" title="Regras e Metas" aria-label="Ajuda">
+          <span>❓</span>
+        </button>
+        <button id="btn-advance-day" class="btn-advance" title="Avançar para o próximo dia se a meta foi atingida">
+          <span>AVANÇAR DIA</span>
+          <span class="advance-icon">➔</span>
+        </button>
+        <button id="btn-restart-game" class="btn-restart-top" title="Reiniciar do Dia 1">
+          <span>REINICIAR</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- BARRA DE PROGRESSO DO DIA -->
+    <div class="progress-section">
+      <div class="progress-info">
+        <span class="prog-text">PROGRESSO DA META:</span>
+        <span class="prog-percentage" id="prog-percentage">100.0%</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progress-fill" style="width: 100%;"></div>
+        <div class="progress-marker marker-target" style="left: 100%;">
+          <span class="marker-label">META</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- CORPO PRINCIPAL: SELETOR DE JOGOS + PAINEL DO JOGO + SIDEBAR (HISTÓRICO / STATS) -->
+    <main class="main-layout">
+      
+      <!-- SELETOR DE JOGOS (TABS/CARDS) -->
+      <nav class="games-selector-nav">
+        <div class="nav-header">
+          <span class="nav-title">JOGOS DISPONÍVEIS (7)</span>
+          <span class="nav-hint">Desbloqueio progressivo</span>
+        </div>
+        
+        <div class="games-tab-list" id="games-tabs">
+          <!-- JOGO 1: CARA OU COROA -->
+          <button class="game-tab-btn active" data-game="moeda" id="tab-moeda">
+            <span class="tab-icon">🪙</span>
+            <div class="tab-info">
+              <span class="tab-name">Cara ou Coroa</span>
+              <span class="tab-unlock">Dia 1 • Mult x1.90</span>
+            </div>
+            <span class="tab-badge free" id="badge-moeda">LIVRE</span>
+          </button>
+
+          <!-- JOGO 2: DADOS -->
+          <button class="game-tab-btn" data-game="dados" id="tab-dados">
+            <span class="tab-icon">🎲</span>
+            <div class="tab-info">
+              <span class="tab-name">Dados</span>
+              <span class="tab-unlock">Dia 2 • Até x5.50</span>
+            </div>
+            <span class="tab-badge" id="badge-dados">🔒 DIA 2</span>
+          </button>
+
+          <!-- JOGO 3: RODA DA SORTE -->
+          <button class="game-tab-btn" data-game="roleta" id="tab-roleta">
+            <span class="tab-icon">🎡</span>
+            <div class="tab-info">
+              <span class="tab-name">Roda da Sorte</span>
+              <span class="tab-unlock">Dia 4 • Até x10.0</span>
+            </div>
+            <span class="tab-badge" id="badge-roleta">🔒 DIA 4</span>
+          </button>
+
+          <!-- JOGO 4: HIGH / LOW -->
+          <button class="game-tab-btn" data-game="highlow" id="tab-highlow">
+            <span class="tab-icon">🃏</span>
+            <div class="tab-info">
+              <span class="tab-name">High / Low</span>
+              <span class="tab-unlock">Dia 6 • Até x4.50</span>
+            </div>
+            <span class="tab-badge" id="badge-highlow">🔒 DIA 6</span>
+          </button>
+
+          <!-- JOGO 5: MINAS -->
+          <button class="game-tab-btn" data-game="minas" id="tab-minas">
+            <span class="tab-icon">💣</span>
+            <div class="tab-info">
+              <span class="tab-name">Minas (5x5)</span>
+              <span class="tab-unlock">Dia 6 • Mult Dinâmico</span>
+            </div>
+            <span class="tab-badge" id="badge-minas">🔒 DIA 6</span>
+          </button>
+
+          <!-- JOGO 6: BLACKJACK -->
+          <button class="game-tab-btn" data-game="blackjack" id="tab-blackjack">
+            <span class="tab-icon">♠️</span>
+            <div class="tab-info">
+              <span class="tab-name">Blackjack 21</span>
+              <span class="tab-unlock">Dia 8 • Até x2.50</span>
+            </div>
+            <span class="tab-badge" id="badge-blackjack">🔒 DIA 8</span>
+          </button>
+
+          <!-- JOGO 7: CRASH -->
+          <button class="game-tab-btn" data-game="crash" id="tab-crash">
+            <span class="tab-icon">🚀</span>
+            <div class="tab-info">
+              <span class="tab-name">Crash Rocket</span>
+              <span class="tab-unlock">Dia 9 • Infinito</span>
+            </div>
+            <span class="tab-badge" id="badge-crash">🔒 DIA 9</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- ÁREA CENTRAL DO JOGO ATIVO -->
+      <section class="game-stage-container">
+        
+        <!-- PAINEL UNIVERSAL DE CONTROLE DE APOSTAS -->
+        <div class="bet-control-panel">
+          <div class="bet-header">
+            <span class="bet-title">💰 CONFIGURAR APOSTA</span>
+            <span class="bet-current-info">Saldo Disponível: <strong id="bet-available-balance">R$ 10.000,00</strong></span>
+          </div>
+
+          <div class="bet-input-row">
+            <div class="input-currency-wrapper">
+              <span class="currency-prefix">R$</span>
+              <input type="number" id="input-bet-amount" value="100" min="1" step="10" placeholder="0">
+            </div>
+
+            <!-- FICHAS RÁPIDAS -->
+            <div class="bet-chips-grid">
+              <button class="bet-chip" data-val="10">+10</button>
+              <button class="bet-chip" data-val="50">+50</button>
+              <button class="bet-chip" data-val="100">+100</button>
+              <button class="bet-chip" data-val="500">+500</button>
+              <button class="bet-chip" data-val="1000">+1K</button>
+              <button class="bet-chip" data-val="5000">+5K</button>
+              <button class="bet-chip" data-val="10000">+10K</button>
+            </div>
+
+            <!-- MULTIPLICADORES / FRAÇÕES DE SALDO -->
+            <div class="bet-modifiers-grid">
+              <button class="bet-mod" data-pct="10">10%</button>
+              <button class="bet-mod" data-pct="25">25%</button>
+              <button class="bet-mod" data-pct="50">50%</button>
+              <button class="bet-mod" data-pct="75">75%</button>
+              <button class="bet-mod max-mod" data-pct="100">ALL-IN</button>
+              <button class="bet-mod-op" id="btn-bet-half">1/2</button>
+              <button class="bet-mod-op" id="btn-bet-double">2X</button>
+              <button class="bet-mod-op" id="btn-bet-clear">LIMPAR</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- MENSAGEM / FEEDBACK DE RESULTADO DA RODADA -->
+        <div id="round-feedback-toast" class="round-feedback-toast hidden">
+          <span id="feedback-icon">🎉</span>
+          <span id="feedback-text">VOCÊ GANHOU +R$ 190,00 (x1.90)</span>
+        </div>
+
+        <!-- CONTAINER DOS JOGOS ESPECÍFICOS -->
+        <div class="games-viewport">
+
+          <!-- ================= JOGO 1: CARA OU COROA ================= -->
+          <div class="game-screen active" id="game-moeda">
+            <div class="game-header-bar">
+              <h2>🪙 CARA OU COROA</h2>
+              <span class="game-meta-badge">Multiplicador: <strong>x1.90</strong> • Chance: <strong>50%</strong></span>
+            </div>
+
+            <div class="coin-arena">
+              <div class="coin-3d-wrapper">
+                <div class="coin-3d" id="coin-element">
+                  <div class="coin-side coin-front">
+                    <div class="coin-inner">
+                      <span class="coin-symbol">👑</span>
+                      <span class="coin-text">CARA</span>
+                    </div>
+                  </div>
+                  <div class="coin-side coin-back">
+                    <div class="coin-inner">
+                      <span class="coin-symbol">⚔️</span>
+                      <span class="coin-text">COROA</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="coin-shadow"></div>
+              <div class="coin-result-label" id="coin-result-label">ESCOLHA SEU LADO E APOSTE</div>
+            </div>
+
+            <div class="coin-controls">
+              <button class="choice-btn active" data-choice="cara" id="btn-choose-cara">
+                <span class="choice-icon">👑</span>
+                <span class="choice-title">CARA</span>
+                <span class="choice-sub">Chance 50% • Pagamento x1.90</span>
+              </button>
+              <button class="choice-btn" data-choice="coroa" id="btn-choose-coroa">
+                <span class="choice-icon">⚔️</span>
+                <span class="choice-title">COROA</span>
+                <span class="choice-sub">Chance 50% • Pagamento x1.90</span>
+              </button>
+            </div>
+
+            <div class="game-action-row">
+              <button class="btn-play-primary" id="btn-play-moeda">
+                <span>GIRAR MOEDA</span>
+                <span class="play-action-icon">🪙</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ================= JOGO 2: DADOS ================= -->
+          <div class="game-screen" id="game-dados">
+            <div class="game-header-bar">
+              <h2>🎲 DADOS DA SORTE</h2>
+              <span class="game-meta-badge">Baixo/Alto: <strong>x1.90</strong> • Exato: <strong>x5.50</strong></span>
+            </div>
+
+            <div class="dice-arena">
+              <div class="dice-stage">
+                <div class="dice-3d" id="dice-element" data-face="1">
+                  <div class="dice-face face-1"><span class="dot"></span></div>
+                  <div class="dice-face face-2"><span class="dot"></span><span class="dot"></span></div>
+                  <div class="dice-face face-3"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+                  <div class="dice-face face-4"><div class="dot-row"><span class="dot"></span><span class="dot"></span></div><div class="dot-row"><span class="dot"></span><span class="dot"></span></div></div>
+                  <div class="dice-face face-5"><div class="dot-row"><span class="dot"></span><span class="dot"></span></div><div class="dot-center"><span class="dot"></span></div><div class="dot-row"><span class="dot"></span><span class="dot"></span></div></div>
+                  <div class="dice-face face-6"><div class="dot-row"><span class="dot"></span><span class="dot"></span></div><div class="dot-row"><span class="dot"></span><span class="dot"></span></div><div class="dot-row"><span class="dot"></span><span class="dot"></span></div></div>
+                </div>
+              </div>
+              <div class="dice-result-label" id="dice-result-label">ESCOLHA UMA MODALIDADE DE DADOS</div>
+            </div>
+
+            <div class="dice-modes-wrapper">
+              <div class="dice-category-title">MODALIDADE:</div>
+              <div class="dice-main-options">
+                <button class="dice-opt-btn active" data-type="baixo" id="dice-opt-baixo">
+                  <span class="opt-highlight">BAIXO (1 - 3)</span>
+                  <span class="opt-mult">x1.90 • 50%</span>
+                </button>
+                <button class="dice-opt-btn" data-type="alto" id="dice-opt-alto">
+                  <span class="opt-highlight">ALTO (4 - 6)</span>
+                  <span class="opt-mult">x1.90 • 50%</span>
+                </button>
+                <button class="dice-opt-btn" data-type="exato" id="dice-opt-exato">
+                  <span class="opt-highlight">NÚMERO EXATO</span>
+                  <span class="opt-mult">x5.50 • 16.67%</span>
+                </button>
+              </div>
+
+              <!-- SELEÇÃO DO NÚMERO EXATO (CONDICIONAL) -->
+              <div class="dice-exact-selector" id="dice-exact-numbers">
+                <span class="selector-title">Escolha o número (1 a 6):</span>
+                <div class="exact-numbers-row">
+                  <button class="exact-num-btn active" data-num="1">1</button>
+                  <button class="exact-num-btn" data-num="2">2</button>
+                  <button class="exact-num-btn" data-num="3">3</button>
+                  <button class="exact-num-btn" data-num="4">4</button>
+                  <button class="exact-num-btn" data-num="5">5</button>
+                  <button class="exact-num-btn" data-num="6">6</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="game-action-row">
+              <button class="btn-play-primary" id="btn-play-dados">
+                <span>ROLAR DADO</span>
+                <span class="play-action-icon">🎲</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ================= JOGO 3: RODA DA SORTE ================= -->
+          <div class="game-screen" id="game-roleta">
+            <div class="game-header-bar">
+              <h2>🎡 RODA DA SORTE</h2>
+              <span class="game-meta-badge">Multiplicadores de <strong>x0.0 até x10.0</strong></span>
+            </div>
+
+            <div class="wheel-arena">
+              <div class="wheel-outer-ring">
+                <div class="wheel-flapper">▼</div>
+                <canvas id="wheel-canvas" width="380" height="380"></canvas>
+                <div class="wheel-center-hub">
+                  <span class="hub-icon">💎</span>
+                </div>
+              </div>
+              <div class="wheel-result-label" id="wheel-result-label">GIRE A RODA PARA MULTIPLICAR SEU SALDO</div>
+            </div>
+
+            <!-- TABELA DE PROBABILIDADES DA RODA -->
+            <div class="wheel-odds-legend">
+              <div class="odd-pill bad"><span>💀 Perde Tudo</span> <b>20%</b></div>
+              <div class="odd-pill low"><span>x0.5</span> <b>20%</b></div>
+              <div class="odd-pill mid"><span>x1.0</span> <b>25%</b></div>
+              <div class="odd-pill mid"><span>x1.5</span> <b>15%</b></div>
+              <div class="odd-pill good"><span>x2.0</span> <b>10%</b></div>
+              <div class="odd-pill epic"><span>x3.0</span> <b>5%</b></div>
+              <div class="odd-pill mythic"><span>x5.0</span> <b>3%</b></div>
+              <div class="odd-pill jackpot"><span>🌟 x10.0</span> <b>2%</b></div>
+            </div>
+
+            <div class="game-action-row">
+              <button class="btn-play-primary" id="btn-play-roleta">
+                <span>GIRAR RODA</span>
+                <span class="play-action-icon">🎡</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ================= JOGO 4: HIGH / LOW ================= -->
+          <div class="game-screen" id="game-highlow">
+            <div class="game-header-bar">
+              <h2>🃏 HIGH / LOW (MAIOR OU MENOR)</h2>
+              <span class="game-meta-badge">Padrão: <strong>x1.80</strong> • High Risk: <strong>x3.50+</strong></span>
+            </div>
+
+            <div class="cards-arena">
+              <div class="card-display-slot">
+                <div class="slot-title">CARTA ATUAL</div>
+                <div class="playing-card" id="hl-card-current">
+                  <div class="card-corner top-left"><span class="c-val">7</span><span class="c-suit">♠</span></div>
+                  <div class="card-center-art">♠</div>
+                  <div class="card-corner bottom-right"><span class="c-val">7</span><span class="c-suit">♠</span></div>
+                </div>
+              </div>
+
+              <div class="versus-divider">VS</div>
+
+              <div class="card-display-slot">
+                <div class="slot-title">PRÓXIMA CARTA</div>
+                <div class="playing-card card-back" id="hl-card-next">
+                  <div class="card-back-pattern">?</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="hl-result-label" id="hl-result-label">A PRÓXIMA CARTA SERÁ MAIOR OU MENOR?</div>
+
+            <!-- OPÇÕES DE APOSTA HIGH/LOW -->
+            <div class="hl-controls-container">
+              <div class="hl-mode-toggle">
+                <button class="mode-toggle-btn active" id="btn-hl-mode-std" data-mode="std">MODO PADRÃO (x1.80)</button>
+                <button class="mode-toggle-btn" id="btn-hl-mode-risk" data-mode="risk">🔥 HIGHER RISK (x3.50+)</button>
+              </div>
+
+              <!-- BOTÕES STANDARD -->
+              <div class="hl-actions-row" id="hl-actions-std">
+                <button class="hl-action-btn high active" data-pred="high" id="btn-hl-high">
+                  <span class="hl-icon">⬆️</span>
+                  <span class="hl-text">HIGH (MAIOR)</span>
+                  <span class="hl-mult">x1.80</span>
+                </button>
+                <button class="hl-action-btn low" data-pred="low" id="btn-hl-low">
+                  <span class="hl-icon">⬇️</span>
+                  <span class="hl-text">LOW (MENOR)</span>
+                  <span class="hl-mult">x1.80</span>
+                </button>
+              </div>
+
+              <!-- BOTÕES HIGH RISK -->
+              <div class="hl-actions-row hidden" id="hl-actions-risk">
+                <button class="hl-action-btn super-high" data-pred="super_high" id="btn-hl-super-high">
+                  <span class="hl-icon">👑</span>
+                  <span class="hl-text">SUPER HIGH (10, J, Q, K)</span>
+                  <span class="hl-mult">x3.60</span>
+                </button>
+                <button class="hl-action-btn super-low" data-pred="super_low" id="btn-hl-super-low">
+                  <span class="hl-icon">🎯</span>
+                  <span class="hl-text">SUPER LOW (A, 2, 3, 4)</span>
+                  <span class="hl-mult">x3.60</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="game-action-row">
+              <button class="btn-play-primary" id="btn-play-highlow">
+                <span>REVELAR CARTA</span>
+                <span class="play-action-icon">🃏</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- ================= JOGO 5: MINAS ================= -->
+          <div class="game-screen" id="game-minas">
+            <div class="game-header-bar">
+              <h2>💣 CAMPO MINADO (5x5)</h2>
+              <span class="game-meta-badge">Multiplicador Atual: <strong id="minas-current-mult" class="neon-gold">x1.00</strong></span>
+            </div>
+
+            <div class="mines-layout-grid">
+              <!-- CONFIGURAÇÕES DE MINAS E BOTÃO DE SAQUE -->
+              <div class="mines-sidebar-controls">
+                <div class="mines-control-group">
+                  <label for="select-mines-count">QUANTIDADE DE MINAS:</label>
+                  <select id="select-mines-count" class="custom-select">
+                    <option value="1">1 Mina (Risco Baixo)</option>
+                    <option value="3" selected>3 Minas (Recomendado)</option>
+                    <option value="5">5 Minas (Risco Médio)</option>
+                    <option value="10">10 Minas (Alto Risco)</option>
+                    <option value="15">15 Minas (Extremo)</option>
+                    <option value="20">20 Minas (Insano)</option>
+                  </select>
+                </div>
+
+                <div class="mines-status-card">
+                  <div class="status-row">
+                    <span>Acertos Seguros:</span>
+                    <strong id="mines-safe-clicks">0</strong>
+                  </div>
+                  <div class="status-row">
+                    <span>Próximo Multiplicador:</span>
+                    <strong id="mines-next-mult" class="neon-green">x1.15</strong>
+                  </div>
+                  <div class="status-row">
+                    <span>Valor de Resgate:</span>
+                    <strong id="mines-cashout-val" class="neon-gold">R$ 0,00</strong>
+                  </div>
+                </div>
+
+                <div class="mines-action-buttons">
+                  <button class="btn-play-primary" id="btn-start-minas">
+                    <span>INICIAR JOGO</span>
+                    <span>💣</span>
+                  </button>
+                  <button class="btn-cashout-mines hidden" id="btn-cashout-minas">
+                    <span>SACAR</span>
+                    <span id="btn-cashout-minas-val">R$ 0,00</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- TABULEIRO 5x5 -->
+              <div class="mines-board-container">
+                <div class="mines-board-grid" id="mines-board">
+                  <!-- 25 células geradas via JS -->
+                </div>
+                <div class="mines-overlay-msg" id="mines-overlay-msg">Configure a aposta e clique em INICIAR</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= JOGO 6: BLACKJACK ================= -->
+          <div class="game-screen" id="game-blackjack">
+            <div class="game-header-bar">
+              <h2>♠️ BLACKJACK 21</h2>
+              <span class="game-meta-badge">Vitória: <strong>x2.0</strong> • Blackjack: <strong>x2.5</strong> • Empate: <strong>Devolve</strong></span>
+            </div>
+
+            <div class="bj-table">
+              <!-- MESA DO DEALER -->
+              <div class="bj-hand-area dealer-area">
+                <div class="bj-hand-header">
+                  <span class="bj-hand-title">DEALER (BANCA)</span>
+                  <span class="bj-score-badge" id="bj-dealer-score">?</span>
+                </div>
+                <div class="bj-cards-row" id="bj-dealer-cards">
+                  <!-- Cartas do dealer -->
+                </div>
+              </div>
+
+              <!-- MENSAGEM DE STATUS DO BLACKJACK -->
+              <div class="bj-status-banner" id="bj-status-msg">FAÇA SUA APOSTA PARA DISTRIBUIR AS CARTAS</div>
+
+              <!-- MESA DO JOGADOR -->
+              <div class="bj-hand-area player-area">
+                <div class="bj-hand-header">
+                  <span class="bj-hand-title">SUA MÃO</span>
+                  <span class="bj-score-badge" id="bj-player-score">0</span>
+                </div>
+                <div class="bj-cards-row" id="bj-player-cards">
+                  <!-- Cartas do jogador -->
+                </div>
+              </div>
+            </div>
+
+            <!-- CONTROLES DO BLACKJACK -->
+            <div class="bj-actions-container">
+              <button class="btn-play-primary" id="btn-bj-deal">
+                <span>DISTRIBUIR CARTAS</span>
+                <span>♠️</span>
+              </button>
+
+              <div class="bj-in-game-actions hidden" id="bj-in-game-actions">
+                <button class="bj-action-btn hit" id="btn-bj-hit">
+                  <span class="bja-icon">➕</span>
+                  <span class="bja-text">COMPRAR (HIT)</span>
+                </button>
+                <button class="bj-action-btn stand" id="btn-bj-stand">
+                  <span class="bja-icon">✋</span>
+                  <span class="bja-text">PARAR (STAND)</span>
+                </button>
+                <button class="bj-action-btn double" id="btn-bj-double">
+                  <span class="bja-icon">⚡</span>
+                  <span class="bja-text">DOBRAR (2X)</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ================= JOGO 7: CRASH ================= -->
+          <div class="game-screen" id="game-crash">
+            <div class="game-header-bar">
+              <h2>🚀 CRASH ROCKET</h2>
+              <span class="game-meta-badge">Saque antes que o foguete exploda!</span>
+            </div>
+
+            <div class="crash-arena-wrapper">
+              <canvas id="crash-canvas" width="680" height="340"></canvas>
+              
+              <div class="crash-multiplier-hud">
+                <div class="crash-live-mult" id="crash-live-mult">1.00x</div>
+                <div class="crash-state-tag" id="crash-state-tag">AGUARDANDO APOSTA</div>
+              </div>
+            </div>
+
+            <div class="crash-controls-row">
+              <button class="btn-play-primary" id="btn-crash-start">
+                <span>LANÇAR FOGUETE</span>
+                <span>🚀</span>
+              </button>
+
+              <button class="btn-cashout-crash hidden" id="btn-crash-cashout">
+                <span class="cashout-label">SACAR AGORA</span>
+                <span class="cashout-amount" id="btn-crash-cashout-val">R$ 0,00</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- TELA DE JOGO BLOQUEADO (OVERLAY QUANDO O JOGO ATUAL NÃO FOI DESBLOQUEADO) -->
+          <div class="game-locked-overlay hidden" id="game-locked-overlay">
+            <div class="locked-box">
+              <span class="lock-icon">🔒</span>
+              <h2 id="locked-title">JOGO BLOQUEADO</h2>
+              <p id="locked-desc">Este jogo será desbloqueado no Dia X.</p>
+              <div class="locked-progress-hint">Avance os dias e cumpra as metas para liberar este modo!</div>
+              <button class="btn-goto-available" id="btn-goto-available">IR PARA JOGO LIBERADO</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- SIDEBAR DIREITA: HISTÓRICO E ESTATÍSTICAS -->
+      <aside class="sidebar-panels">
+        
+        <!-- PAINEL DE ESTATÍSTICAS -->
+        <div class="side-panel stats-panel">
+          <div class="panel-header">
+            <h3>📊 ESTATÍSTICAS DA PARTIDA</h3>
+          </div>
+          <div class="stats-list">
+            <div class="stat-row">
+              <span>Total Apostado:</span>
+              <strong id="stat-total-apostado">R$ 0,00</strong>
+            </div>
+            <div class="stat-row">
+              <span>Total Ganho:</span>
+              <strong class="neon-green" id="stat-total-ganho">R$ 0,00</strong>
+            </div>
+            <div class="stat-row">
+              <span>Total Perdido:</span>
+              <strong class="neon-red" id="stat-total-perdido">R$ 0,00</strong>
+            </div>
+            <div class="stat-row">
+              <span>Maior Aposta:</span>
+              <strong id="stat-maior-aposta">R$ 0,00</strong>
+            </div>
+            <div class="stat-row">
+              <span>Maior Vitória:</span>
+              <strong class="neon-gold" id="stat-maior-vitoria">R$ 0,00</strong>
+            </div>
+            <div class="stat-row">
+              <span>Maior Multiplicador:</span>
+              <strong class="neon-purple" id="stat-maior-mult">x0.00</strong>
+            </div>
+            <div class="stat-row">
+              <span>Sequência de Vitórias:</span>
+              <strong id="stat-win-streak">0</strong>
+            </div>
+            <div class="stat-row">
+              <span>Recorde de Sequência:</span>
+              <strong id="stat-max-streak">0</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- PAINEL DE HISTÓRICO DE APOSTAS -->
+        <div class="side-panel history-panel">
+          <div class="panel-header">
+            <h3>📜 HISTÓRICO RECENTE</h3>
+            <span class="history-count" id="history-count">0/20</span>
+          </div>
+          <div class="history-items-list" id="history-list">
+            <div class="empty-history">Nenhuma aposta realizada ainda.</div>
+          </div>
+        </div>
+
+      </aside>
+
+    </main>
+  </div>
+
+  <!-- ================= MODAIS ================= -->
+
+  <!-- 1. MODAL DE PRIMEIRO ACESSO / ONBOARDING -->
+  <div class="modal-backdrop" id="modal-welcome">
+    <div class="modal-box modal-intro">
+      <div class="modal-header-hero">
+        <span class="hero-badge">SIMULAÇÃO ESTRATÉGICA</span>
+        <h1 class="hero-title">BET <span class="neon-text">WARRIORS</span></h1>
+      </div>
+      
+      <div class="intro-highlights">
+        <div class="intro-item">
+          <span class="intro-icon">🔥</span>
+          <div class="intro-desc"><strong>10 DIAS</strong> DE DESAFIO CRESCENTE</div>
+        </div>
+        <div class="intro-item">
+          <span class="intro-icon">💰</span>
+          <div class="intro-desc"><strong>1 GRANDE OBJETIVO:</strong> R$ 1.000.000+</div>
+        </div>
+        <div class="intro-item">
+          <span class="intro-icon">🎰</span>
+          <div class="intro-desc"><strong>7 JOGOS</strong> DESBLOQUEADOS PROGRESSIVAMENTE</div>
+        </div>
+        <div class="intro-item">
+          <span class="intro-icon">🏆</span>
+          <div class="intro-desc"><strong>UMA ÚNICA META</strong> A CADA DIA</div>
+        </div>
+      </div>
+
+      <div class="intro-rules-summary">
+        <p>• Comece com <strong>R$ 10.000 de dinheiro fictício</strong> no Dia 1.</p>
+        <p>• Cada dia tem <strong>2 minutos</strong> de tempo limite.</p>
+        <p>• <strong>Meta Dinâmica:</strong> Se você lucrar além da meta, o percentual excedente aumentará proporcionalmente a meta do dia seguinte!</p>
+        <p>• Se o tempo acabar e seu saldo for menor que a meta, a partida é reiniciada.</p>
+      </div>
+
+      <div class="fictional-disclaimer-box">
+        ⚠️ <strong>Aviso Importante:</strong> Este é um jogo com dinheiro 100% fictício para fins de entretenimento e estratégia. Não aceita dinheiro real nem realiza pagamentos.
+      </div>
+
+      <button class="btn-hero-start" id="btn-welcome-start">COMEÇAR DESAFIO ➔</button>
+    </div>
+  </div>
+
+  <!-- 2. MODAL DE DIA CONCLUÍDO (SUCESSO NO DIA) -->
+  <div class="modal-backdrop hidden" id="modal-day-win">
+    <div class="modal-box modal-day-result">
+      <div class="modal-glow-badge">🎉 DIA SUPERADO!</div>
+      <h2 id="day-win-title">DIA 1 CONCLUÍDO COM SUCESSO</h2>
+      
+      <div class="day-win-stats-grid">
+        <div class="dstat-box">
+          <span class="dstat-label">Saldo Final:</span>
+          <strong class="dstat-val neon-green" id="day-win-saldo">R$ 15.000,00</strong>
+        </div>
+        <div class="dstat-box">
+          <span class="dstat-label">Meta que era exigida:</span>
+          <strong class="dstat-val neon-gold" id="day-win-meta-antiga">R$ 10.000,00</strong>
+        </div>
+        <div class="dstat-box">
+          <span class="dstat-label">Lucro Excedente:</span>
+          <strong class="dstat-val neon-blue" id="day-win-excesso">+R$ 5.000,00 (+50.0%)</strong>
+        </div>
+        <div class="dstat-box highlight-box">
+          <span class="dstat-label">Próxima Meta (Dia Seguinte):</span>
+          <strong class="dstat-val neon-purple" id="day-win-proxima-meta">R$ 30.000,00</strong>
+          <span class="dstat-hint" id="day-win-meta-calc-hint">Base R$ 20.000 + 50.0% de aumento dinâmico</span>
+        </div>
+      </div>
+
+      <div class="unlock-notification" id="day-win-unlock-alert">
+        <span class="unlock-icon">🔓</span>
+        <span class="unlock-text" id="day-win-unlock-text">Novo jogo desbloqueado: DADOS!</span>
+      </div>
+
+      <button class="btn-hero-start" id="btn-day-win-continue">INICIAR PRÓXIMO DIA ➔</button>
+    </div>
+  </div>
+
+  <!-- 3. MODAL DE DERROTA (GAME OVER) -->
+  <div class="modal-backdrop hidden" id="modal-game-over">
+    <div class="modal-box modal-defeat">
+      <div class="defeat-badge">💀 VOCÊ PERDEU</div>
+      <h2>META NÃO ALCANÇADA</h2>
+      <p id="defeat-reason-text">Você não conseguiu alcançar a meta do Dia X.</p>
+
+      <div class="defeat-stats-grid">
+        <div class="df-box">
+          <span>Seu Saldo:</span>
+          <strong class="neon-red" id="defeat-saldo">R$ 0,00</strong>
+        </div>
+        <div class="df-box">
+          <span>Meta Necessária:</span>
+          <strong class="neon-gold" id="defeat-meta">R$ 35.000,00</strong>
+        </div>
+        <div class="df-box">
+          <span>Dia da Queda:</span>
+          <strong id="defeat-dia">Dia 3 / 10</strong>
+        </div>
+      </div>
+
+      <button class="btn-hero-start defeat-btn" id="btn-defeat-retry">TENTAR NOVAMENTE 🔄</button>
+    </div>
+  </div>
+
+  <!-- 4. MODAL DE VITÓRIA FINAL (DIA 10 CONCLUÍDO) -->
+  <div class="modal-backdrop hidden" id="modal-victory">
+    <div class="modal-box modal-victory-box">
+      <div class="trophy-spin">🏆</div>
+      <div class="victory-header">
+        <span class="neon-text">BET WARRIORS</span>
+        <h1>VOCÊ VENCEU O DESAFIO!</h1>
+        <p class="victory-sub">META FINAL CONCLUÍDA COM GLÓRIA</p>
+      </div>
+
+      <div class="victory-stats-card">
+        <div class="vstat-item">
+          <span>Saldo Final Acumulado:</span>
+          <strong class="neon-green" id="vstat-saldo-final">R$ 1.250.000,00</strong>
+        </div>
+        <div class="vstat-item">
+          <span>Dias Concluídos:</span>
+          <strong>10 / 10</strong>
+        </div>
+        <div class="vstat-item">
+          <span>Total de Apostas:</span>
+          <strong id="vstat-total-apostas">0</strong>
+        </div>
+        <div class="vstat-item">
+          <span>Maior Vitória Individual:</span>
+          <strong class="neon-gold" id="vstat-maior-vitoria">R$ 0,00</strong>
+        </div>
+        <div class="vstat-item">
+          <span>Maior Multiplicador Conquistado:</span>
+          <strong class="neon-purple" id="vstat-maior-mult">x0.00</strong>
+        </div>
+      </div>
+
+      <button class="btn-hero-start victory-btn" id="btn-victory-restart">JOGAR NOVAMENTE 🏆</button>
+    </div>
+  </div>
+
+  <!-- 5. MODAL DE REGRAS E TABELA DE METAS -->
+  <div class="modal-backdrop hidden" id="modal-help">
+    <div class="modal-box modal-help-box">
+      <div class="help-header">
+        <h2>📖 REGRAS E METAS — BET WARRIORS</h2>
+        <button class="btn-close-modal" id="btn-close-help">✕</button>
+      </div>
+
+      <div class="help-scroll-content">
+        <h3>🎯 TABELA DE METAS BASE POR DIA</h3>
+        <table class="help-table">
+          <thead>
+            <tr>
+              <th>Dia</th>
+              <th>Meta Base</th>
+              <th>Jogos Desbloqueados</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Dia 1</td><td>R$ 10.000</td><td>🪙 Cara ou Coroa</td></tr>
+            <tr><td>Dia 2</td><td>R$ 20.000</td><td>🎲 Dados da Sorte</td></tr>
+            <tr><td>Dia 3</td><td>R$ 35.000</td><td>-</td></tr>
+            <tr><td>Dia 4</td><td>R$ 60.000</td><td>🎡 Roda da Sorte</td></tr>
+            <tr><td>Dia 5</td><td>R$ 100.000</td><td>-</td></tr>
+            <tr><td>Dia 6</td><td>R$ 180.000</td><td>🃏 High/Low & 💣 Minas (5x5)</td></tr>
+            <tr><td>Dia 7</td><td>R$ 300.000</td><td>-</td></tr>
+            <tr><td>Dia 8</td><td>R$ 500.000</td><td>♠️ Blackjack 21</td></tr>
+            <tr><td>Dia 9</td><td>R$ 750.000</td><td>🚀 Crash Rocket</td></tr>
+            <tr><td>Dia 10</td><td>R$ 1.000.000+</td><td>🏆 Todos os jogos disponíveis</td></tr>
+          </tbody>
+        </table>
+
+        <h3>📈 SISTEMA DE AUMENTO DINÂMICO DAS METAS</h3>
+        <p>Se você terminar um dia com saldo superior à meta exigida, o percentual de lucro excedente será somado à meta base do dia seguinte:</p>
+        <div class="formula-box">
+          <code>novaMeta = metaBaseDoProximoDia × (1 + percentualExcedente)</code>
+        </div>
+        <p>Exemplo: Meta do Dia 3 = R$ 35.000. Você terminou com R$ 42.000 (20% excedente). A meta base do Dia 4 é R$ 60.000, logo a sua nova meta será <strong>R$ 72.000</strong>.</p>
+
+        <h3>⏱️ TEMPO E ESTRATÉGIA</h3>
+        <p>Cada dia tem duração de <strong>2 minutos (120s)</strong>. Você pode avançar o dia a qualquer momento usando o botão "AVANÇAR DIA" assim que atingir a meta, protegendo seu saldo de eventuais perdas!</p>
+      </div>
+
+      <button class="btn-hero-start" id="btn-help-ok">ENTENDIDO</button>
+    </div>
+  </div>
+
+  <!-- 6. MODAL DE CONFIRMAÇÃO DE REINÍCIO -->
+  <div class="modal-backdrop hidden" id="modal-confirm-restart">
+    <div class="modal-box modal-confirm">
+      <h3>⚠️ REINICIAR PARTIDA?</h3>
+      <p>Todo o progresso atual será resetado para o Dia 1 com R$ 10.000.</p>
+      <div class="confirm-actions-row">
+        <button class="btn-cancel" id="btn-restart-cancel">CANCELAR</button>
+        <button class="btn-danger" id="btn-restart-confirm">SIM, REINICIAR</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
