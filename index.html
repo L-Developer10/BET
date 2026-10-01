@@ -34,6 +34,12 @@
 
       <!-- MÉTRICAS CENTRAIS -->
       <div class="hud-stats-grid">
+        <!-- BOTÃO MODO INFINITO (à esquerda do dia) -->
+        <button id="btn-infinite-mode" class="btn-infinite-mode" title="Entrar no Modo Infinito — Sem tempo, todos os jogos liberados!">
+          <span class="infinite-icon">∞</span>
+          <span class="infinite-label">INFINITO</span>
+        </button>
+
         <!-- DIA ATUAL -->
         <div class="hud-card day-card">
           <div class="hud-label">FASE ATUAL</div>
@@ -195,25 +201,32 @@
         <!-- PAINEL UNIVERSAL DE CONTROLE DE APOSTAS -->
         <div class="bet-control-panel">
           <div class="bet-header">
-            <span class="bet-title">💰 CONFIGURAR APOSTA</span>
+            <div class="bet-title-group">
+              <span class="bet-title">⚡ CONFIGURAR APOSTA</span>
+              <span class="bet-percent-badge" id="bet-percent-badge">1.0% da banca</span>
+            </div>
             <span class="bet-current-info">Saldo Disponível: <strong id="bet-available-balance">R$ 10.000,00</strong></span>
           </div>
 
           <div class="bet-input-row">
             <div class="input-currency-wrapper">
-              <span class="currency-prefix">R$</span>
-              <input type="number" id="input-bet-amount" value="100" min="1" step="10" placeholder="0">
+              <button type="button" class="bet-stepper-btn btn-dec" id="btn-bet-dec" title="Diminuir Aposta">−</button>
+              <div class="input-box-inner">
+                <span class="currency-prefix">R$</span>
+                <input type="number" id="input-bet-amount" value="100" min="1" step="10" placeholder="0">
+              </div>
+              <button type="button" class="bet-stepper-btn btn-inc" id="btn-bet-inc" title="Aumentar Aposta">+</button>
             </div>
 
             <!-- FICHAS RÁPIDAS -->
             <div class="bet-chips-grid">
-              <button class="bet-chip" data-val="10">+10</button>
-              <button class="bet-chip" data-val="50">+50</button>
-              <button class="bet-chip" data-val="100">+100</button>
-              <button class="bet-chip" data-val="500">+500</button>
-              <button class="bet-chip" data-val="1000">+1K</button>
-              <button class="bet-chip" data-val="5000">+5K</button>
-              <button class="bet-chip" data-val="10000">+10K</button>
+              <button class="bet-chip chip-10" data-val="10">+10</button>
+              <button class="bet-chip chip-50" data-val="50">+50</button>
+              <button class="bet-chip chip-100" data-val="100">+100</button>
+              <button class="bet-chip chip-500" data-val="500">+500</button>
+              <button class="bet-chip chip-1k" data-val="1000">+1K</button>
+              <button class="bet-chip chip-5k" data-val="5000">+5K</button>
+              <button class="bet-chip chip-10k" data-val="10000">+10K</button>
             </div>
 
             <!-- MULTIPLICADORES / FRAÇÕES DE SALDO -->
@@ -878,6 +891,196 @@
         <button class="btn-danger" id="btn-restart-confirm">SIM, REINICIAR</button>
       </div>
     </div>
+  </div>
+
+  <!-- ============================================================
+       MODO INFINITO — OVERLAY COMPLETO SEPARADO
+       ============================================================ -->
+  <div id="infinite-mode-overlay" class="infinite-mode-overlay hidden">
+
+    <!-- HEADER DO MODO INFINITO -->
+    <header class="inf-header">
+      <div class="inf-brand">
+        <span class="inf-icon-logo">∞</span>
+        <div class="inf-title-block">
+          <h1 class="inf-title">MODO <span class="neon-inf">INFINITO</span></h1>
+          <span class="inf-sub">Sem tempo · Todos os jogos · Bônus automático</span>
+        </div>
+      </div>
+
+      <!-- HUD DO MODO INFINITO -->
+      <div class="inf-hud">
+        <div class="inf-hud-card">
+          <div class="inf-hud-label">SALDO FICTÍCIO</div>
+          <div class="inf-hud-value neon-green" id="inf-hud-saldo">R$ 10.000,00</div>
+          <div class="inf-balance-change" id="inf-balance-change"></div>
+        </div>
+        <div class="inf-hud-card inf-bonus-card">
+          <div class="inf-hud-label">PRÓXIMO BÔNUS</div>
+          <div class="inf-bonus-row">
+            <div class="inf-bonus-item">
+              <span class="inf-bonus-val" id="inf-bonus-10s">10s</span>
+              <span class="inf-bonus-desc">+R$50</span>
+              <div class="inf-bonus-bar-wrap"><div class="inf-bonus-bar" id="inf-bar-10s"></div></div>
+            </div>
+            <div class="inf-bonus-divider">|</div>
+            <div class="inf-bonus-item">
+              <span class="inf-bonus-val" id="inf-bonus-5m">1:00</span>
+              <span class="inf-bonus-desc">+R$1500 (1m)</span>
+              <div class="inf-bonus-bar-wrap"><div class="inf-bonus-bar inf-bonus-bar-gold" id="inf-bar-5m"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="inf-hud-card">
+          <div class="inf-hud-label">BÔNUS COLETADO</div>
+          <div class="inf-hud-value neon-gold" id="inf-total-bonus">R$ 0,00</div>
+        </div>
+      </div>
+
+      <!-- BOTÃO SAIR -->
+      <button id="btn-exit-infinite" class="btn-exit-infinite">
+        <span>✕</span>
+        <span>SAIR</span>
+      </button>
+    </header>
+
+    <!-- NOTIFICAÇÃO DE BÔNUS -->
+    <div id="inf-bonus-toast" class="inf-bonus-toast hidden"></div>
+
+    <!-- CORPO DO MODO INFINITO -->
+    <main class="inf-main-layout">
+
+      <!-- SELETOR DE JOGOS -->
+      <nav class="inf-games-nav">
+        <div class="inf-nav-header">
+          <span class="inf-nav-title">🎮 TODOS OS JOGOS LIBERADOS</span>
+        </div>
+        <div class="inf-games-tab-list" id="inf-games-tabs">
+          <button class="inf-game-tab active" data-inf-game="moeda" id="inf-tab-moeda">
+            <span class="tab-icon">🪙</span>
+            <div class="tab-info">
+              <span class="tab-name">Cara ou Coroa</span>
+              <span class="tab-unlock">x1.90</span>
+            </div>
+            <span class="tab-badge free">LIVRE</span>
+          </button>
+          <button class="inf-game-tab" data-inf-game="dados" id="inf-tab-dados">
+            <span class="tab-icon">🎲</span>
+            <div class="tab-info">
+              <span class="tab-name">Dados</span>
+              <span class="tab-unlock">Até x5.50</span>
+            </div>
+            <span class="tab-badge free">LIVRE</span>
+          </button>
+          <button class="inf-game-tab" data-inf-game="roleta" id="inf-tab-roleta">
+            <span class="tab-icon">🎡</span>
+            <div class="tab-info">
+              <span class="tab-name">Roda da Sorte</span>
+              <span class="tab-unlock">Até x10.0</span>
+            </div>
+            <span class="tab-badge free">LIVRE</span>
+          </button>
+          <button class="inf-game-tab" data-inf-game="highlow" id="inf-tab-highlow">
+            <span class="tab-icon">🃏</span>
+            <div class="tab-info">
+              <span class="tab-name">High / Low</span>
+              <span class="tab-unlock">Até x4.50</span>
+            </div>
+            <span class="tab-badge free">LIVRE</span>
+          </button>
+          <button class="inf-game-tab" data-inf-game="minas" id="inf-tab-minas">
+            <span class="tab-icon">💣</span>
+            <div class="tab-info">
+              <span class="tab-name">Minas (5x5)</span>
+              <span class="tab-unlock">Mult Dinâmico</span>
+            </div>
+            <span class="tab-badge free">LIVRE</span>
+          </button>
+          <button class="inf-game-tab" data-inf-game="blackjack" id="inf-tab-blackjack">
+            <span class="tab-icon">♠️</span>
+            <div class="tab-info">
+              <span class="tab-name">Blackjack 21</span>
+              <span class="tab-unlock">Até x2.50</span>
+            </div>
+            <span class="tab-badge free">LIVRE</span>
+          </button>
+          <button class="inf-game-tab" data-inf-game="crash" id="inf-tab-crash">
+            <span class="tab-icon">🚀</span>
+            <div class="tab-info">
+              <span class="tab-name">Crash Rocket</span>
+              <span class="tab-unlock">Infinito</span>
+            </div>
+            <span class="tab-badge free">LIVRE</span>
+          </button>
+        </div>
+      </nav>
+
+      <!-- ÁREA DE JOGOS DO MODO INFINITO (reutiliza os mesmos painéis via clone/referência) -->
+      <section class="inf-game-stage">
+
+        <!-- PAINEL DE APOSTA -->
+        <div class="bet-control-panel">
+          <div class="bet-header">
+            <div class="bet-title-group">
+              <span class="bet-title">⚡ CONFIGURAR APOSTA</span>
+              <span class="bet-percent-badge" id="inf-bet-percent-badge">1.0% da banca</span>
+            </div>
+            <span class="bet-current-info">Saldo Disponível: <strong id="inf-bet-available">R$ 10.000,00</strong></span>
+          </div>
+          <div class="bet-input-row">
+            <div class="input-currency-wrapper">
+              <button type="button" class="bet-stepper-btn btn-dec" id="inf-btn-bet-dec" title="Diminuir Aposta">−</button>
+              <div class="input-box-inner">
+                <span class="currency-prefix">R$</span>
+                <input type="number" id="inf-input-bet" value="100" min="1" step="10" placeholder="0">
+              </div>
+              <button type="button" class="bet-stepper-btn btn-inc" id="inf-btn-bet-inc" title="Aumentar Aposta">+</button>
+            </div>
+            <div class="bet-chips-grid">
+              <button class="bet-chip chip-10" data-inf-val="10">+10</button>
+              <button class="bet-chip chip-50" data-inf-val="50">+50</button>
+              <button class="bet-chip chip-100" data-inf-val="100">+100</button>
+              <button class="bet-chip chip-500" data-inf-val="500">+500</button>
+              <button class="bet-chip chip-1k" data-inf-val="1000">+1K</button>
+              <button class="bet-chip chip-5k" data-inf-val="5000">+5K</button>
+              <button class="bet-chip chip-10k" data-inf-val="10000">+10K</button>
+            </div>
+            <div class="bet-modifiers-grid">
+              <button class="bet-mod" data-inf-pct="10">10%</button>
+              <button class="bet-mod" data-inf-pct="25">25%</button>
+              <button class="bet-mod" data-inf-pct="50">50%</button>
+              <button class="bet-mod" data-inf-pct="75">75%</button>
+              <button class="bet-mod max-mod" data-inf-pct="100">ALL-IN</button>
+              <button class="bet-mod-op" id="inf-btn-half">1/2</button>
+              <button class="bet-mod-op" id="inf-btn-double">2X</button>
+              <button class="bet-mod-op" id="inf-btn-clear">LIMPAR</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TOAST DE RESULTADO -->
+        <div id="inf-round-feedback" class="round-feedback-toast hidden">
+          <span id="inf-feedback-icon">🎉</span>
+          <span id="inf-feedback-text">RESULTADO</span>
+        </div>
+
+        <!-- VIEWPORT DOS JOGOS DO MODO INFINITO -->
+        <div class="games-viewport" id="inf-games-viewport">
+          <!-- Os jogos serão injetados por JS como cópias do modo padrão -->
+        </div>
+      </section>
+
+      <!-- SIDEBAR HISTÓRICO -->
+      <aside class="inf-sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-header">
+            <span class="sidebar-title">📋 HISTÓRICO</span>
+            <span class="sidebar-count" id="inf-history-count">0/20</span>
+          </div>
+          <div class="history-list-container" id="inf-history-list"></div>
+        </div>
+      </aside>
+    </main>
   </div>
 
   <script src="script.js"></script>
