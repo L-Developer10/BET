@@ -365,6 +365,27 @@ function formatarMoeda(valor) {
 }
 
 /**
+ * Atualiza os badges dinâmicos de porcentagem da banca do valor da aposta
+ */
+function atualizarBadgePercentualAposta() {
+  const inputNorm = document.getElementById('input-bet-amount');
+  const badgeNorm = document.getElementById('bet-percent-badge');
+  if (inputNorm && badgeNorm) {
+    const val = Number(inputNorm.value) || 0;
+    const pct = estado.saldo > 0 ? ((val / estado.saldo) * 100).toFixed(1) : '0.0';
+    badgeNorm.textContent = `${pct}% da banca`;
+  }
+
+  const inputInf = document.getElementById('inf-input-bet');
+  const badgeInf = document.getElementById('inf-bet-percent-badge');
+  if (inputInf && badgeInf) {
+    const val = Number(inputInf.value) || 0;
+    const pct = estado.saldo > 0 ? ((val / estado.saldo) * 100).toFixed(1) : '0.0';
+    badgeInf.textContent = `${pct}% da banca`;
+  }
+}
+
+/**
  * Atualiza todos os elementos visuais do HUD, progresso, saldo e estatísticas.
  */
 function atualizarInterface() {
@@ -379,6 +400,7 @@ function atualizarInterface() {
   if (hudSaldo) hudSaldo.textContent = formatarMoeda(estado.saldo);
   if (hudMeta) hudMeta.textContent = formatarMoeda(estado.metaAtual);
   if (betAvail) betAvail.textContent = formatarMoeda(estado.saldo);
+  atualizarBadgePercentualAposta();
 
   // Diferença até a meta
   if (hudFalta) {
@@ -1927,15 +1949,38 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Controles de Aposta (Chips, Frações, Operações)
+  // Controles de Aposta (Chips, Frações, Steppers, Operações)
   const inputBet = document.getElementById('input-bet-amount');
+
+  if (inputBet) {
+    inputBet.addEventListener('input', () => {
+      atualizarBadgePercentualAposta();
+    });
+  }
+
+  document.getElementById('btn-bet-dec')?.addEventListener('click', () => {
+    audio.tocarSom('click');
+    const atual = Number(inputBet?.value) || 10;
+    const step = atual > 1000 ? 500 : (atual > 100 ? 50 : (atual > 10 ? 10 : 1));
+    if (inputBet) inputBet.value = Math.max(1, atual - step);
+    atualizarBadgePercentualAposta();
+  });
+
+  document.getElementById('btn-bet-inc')?.addEventListener('click', () => {
+    audio.tocarSom('click');
+    const atual = Number(inputBet?.value) || 0;
+    const step = atual >= 1000 ? 500 : (atual >= 100 ? 50 : 10);
+    if (inputBet) inputBet.value = Math.min(estado.saldo, atual + step);
+    atualizarBadgePercentualAposta();
+  });
 
   document.querySelectorAll('.bet-chip').forEach(chip => {
     chip.addEventListener('click', () => {
       audio.tocarSom('click');
       const add = Number(chip.dataset.val);
-      const atual = Number(inputBet.value) || 0;
-      inputBet.value = Math.min(estado.saldo, atual + add);
+      const atual = Number(inputBet?.value) || 0;
+      if (inputBet) inputBet.value = Math.min(estado.saldo, atual + add);
+      atualizarBadgePercentualAposta();
     });
   });
 
@@ -1944,25 +1989,29 @@ document.addEventListener('DOMContentLoaded', () => {
       audio.tocarSom('click');
       const pct = Number(mod.dataset.pct);
       const calc = Math.max(1, Math.floor((estado.saldo * pct) / 100));
-      inputBet.value = calc;
+      if (inputBet) inputBet.value = calc;
+      atualizarBadgePercentualAposta();
     });
   });
 
   document.getElementById('btn-bet-half')?.addEventListener('click', () => {
     audio.tocarSom('click');
-    const atual = Number(inputBet.value) || 1;
-    inputBet.value = Math.max(1, Math.floor(atual / 2));
+    const atual = Number(inputBet?.value) || 1;
+    if (inputBet) inputBet.value = Math.max(1, Math.floor(atual / 2));
+    atualizarBadgePercentualAposta();
   });
 
   document.getElementById('btn-bet-double')?.addEventListener('click', () => {
     audio.tocarSom('click');
-    const atual = Number(inputBet.value) || 1;
-    inputBet.value = Math.min(estado.saldo, atual * 2);
+    const atual = Number(inputBet?.value) || 1;
+    if (inputBet) inputBet.value = Math.min(estado.saldo, atual * 2);
+    atualizarBadgePercentualAposta();
   });
 
   document.getElementById('btn-bet-clear')?.addEventListener('click', () => {
     audio.tocarSom('click');
-    inputBet.value = 10;
+    if (inputBet) inputBet.value = 10;
+    atualizarBadgePercentualAposta();
   });
 
   // ================= JOGO 1: MOEDA =================
@@ -2175,5 +2224,1261 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 })();
 
+/* ====================================================================
+   MODO INFINITO — SISTEMA COMPLETO
+   ==================================================================== */
 
+/**
+ * Estado exclusivo do Modo Infinito.
+ * O saldo é COMPARTILHADO com o modo padrão (estado.saldo).
+ */
+const modoInfinito = {
+  ativo: false,
+  jogoAtivo: 'moeda',
+  totalBonus: 0,
+  historico: [],
+
+  // Contadores internos dos bônus (em segundos decorridos)
+  segundosDecorridos10s: 0,
+  segundosDecorridos5m: 0,
+
+  // Referência ao intervalo principal do modo infinito
+  intervalo: null,
+
+  // Subjogos do modo infinito (estado separado)
+  subjogos: {
+    moeda: { escolha: 'cara' },
+    dados: { tipo: 'baixo', numeroExato: 1 },
+    roleta: { anguloAtual: 0, girando: false },
+    highlow: { modo: 'std', predicao: 'high', cartaAtual: null },
+    minas: {
+      ativo: false,
+      quantidadeMinas: 3,
+      apostaAtual: 0,
+      tabuleiro: [],
+      revelados: [],
+      multiplicadorAtual: 1.0
+    },
+    blackjack: {
+      ativo: false,
+      apostaAtual: 0,
+      baralho: [],
+      maoJogador: [],
+      maoDealer: [],
+      dealerOculto: true
+    },
+    crash: {
+      ativo: false,
+      apostaAtual: 0,
+      pontoCrash: 1.0,
+      multiplicadorAtual: 1.0,
+      sacou: false,
+      animacaoId: null,
+      tempoInicio: 0
+    }
+  }
+};
+
+/* ------------------------------------------------------------------ */
+/* FUNÇÕES DE SUPORTE AO MODO INFINITO                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Obtém o valor de aposta do campo do Modo Infinito
+ */
+function infObterValorAposta() {
+  const input = document.getElementById('inf-input-bet');
+  if (!input) return 0;
+  let val = Math.floor(Number(input.value));
+  if (isNaN(val) || val <= 0) val = 1;
+  if (val > estado.saldo) val = estado.saldo;
+  input.value = val;
+  return val;
+}
+
+/**
+ * Atualiza os elementos de HUD do Modo Infinito
+ */
+function infAtualizarHUD() {
+  const saldoEl = document.getElementById('inf-hud-saldo');
+  const availEl = document.getElementById('inf-bet-available');
+  const bonusEl = document.getElementById('inf-total-bonus');
+  if (saldoEl) saldoEl.textContent = formatarMoeda(estado.saldo);
+  if (availEl) availEl.textContent = formatarMoeda(estado.saldo);
+  if (bonusEl) bonusEl.textContent = formatarMoeda(modoInfinito.totalBonus);
+  atualizarBadgePercentualAposta();
+}
+
+/**
+ * Animação de mudança de saldo no HUD do Modo Infinito
+ */
+function infAnimarSaldo(valor, ganhou) {
+  const el = document.getElementById('inf-balance-change');
+  if (!el) return;
+  el.textContent = `${ganhou ? '+' : '-'}${formatarMoeda(Math.abs(valor))}`;
+  el.className = `inf-balance-change ${ganhou ? 'plus' : 'minus'}`;
+  setTimeout(() => { el.className = 'inf-balance-change'; }, 1300);
+}
+
+/**
+ * Exibe toast de resultado de rodada no Modo Infinito
+ */
+function infExibirFeedback(mensagem, ganhou, icone = '🎉') {
+  const toast = document.getElementById('inf-round-feedback');
+  const txt   = document.getElementById('inf-feedback-text');
+  const ico   = document.getElementById('inf-feedback-icon');
+  if (!toast) return;
+  toast.className = `round-feedback-toast ${ganhou ? 'win' : 'loss'}`;
+  if (txt) txt.textContent = mensagem;
+  if (ico) ico.textContent = icone;
+  setTimeout(() => toast.classList.add('hidden'), 3500);
+}
+
+/**
+ * Registra aposta no histórico do Modo Infinito
+ */
+function infRegistrarHistorico(nomeJogo, valorApostado, ehVitoria, retorno, multiplicador) {
+  const lucro = ehVitoria ? (retorno - valorApostado) : -valorApostado;
+  modoInfinito.historico.unshift({
+    jogo: nomeJogo, aposta: valorApostado, vitoria: ehVitoria,
+    lucro, mult: multiplicador,
+    hora: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  });
+  if (modoInfinito.historico.length > 20) modoInfinito.historico.pop();
+
+  const listEl = document.getElementById('inf-history-list');
+  const countEl = document.getElementById('inf-history-count');
+  if (countEl) countEl.textContent = `${modoInfinito.historico.length}/20`;
+  if (listEl) {
+    listEl.innerHTML = '';
+    modoInfinito.historico.forEach(h => {
+      const card = document.createElement('div');
+      card.className = `history-card-item ${h.vitoria ? 'win' : 'loss'}`;
+      card.innerHTML = `
+        <div class="history-top-line">
+          <span class="history-game-name">${h.vitoria ? '🟢' : '🔴'} ${h.jogo}</span>
+          <span class="history-profit ${h.vitoria ? 'neon-green' : 'neon-red'}">
+            ${h.vitoria ? '+' : ''}${formatarMoeda(h.lucro)}
+          </span>
+        </div>
+        <div class="history-bottom-line">
+          <span>Aposta: ${formatarMoeda(h.aposta)} (x${h.mult.toFixed(2)})</span>
+          <span>${h.hora}</span>
+        </div>
+      `;
+      listEl.appendChild(card);
+    });
+  }
+}
+
+/**
+ * Mostra uma notificação de bônus recebido
+ */
+function infMostrarToastBonus(mensagem, tipo = 'cyan') {
+  const antigo = document.querySelector('.inf-bonus-toast-fixed');
+  if (antigo) antigo.remove();
+
+  const t = document.createElement('div');
+  t.className = `inf-bonus-toast-fixed ${tipo}`;
+  t.textContent = mensagem;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3600);
+}
+
+/* ------------------------------------------------------------------ */
+/* SISTEMA DE BÔNUS AUTOMÁTICOS                                        */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Inicia o loop principal de bônus do Modo Infinito
+ * +R$50 a cada 10 segundos
+ * +R$1500 a cada 1 minuto (60 segundos)
+ */
+function infIniciarBonusLoop() {
+  if (modoInfinito.intervalo) clearInterval(modoInfinito.intervalo);
+
+  modoInfinito.segundosDecorridos10s = 0;
+  modoInfinito.segundosDecorridos5m  = 0;
+
+  modoInfinito.intervalo = setInterval(() => {
+    if (!modoInfinito.ativo) return;
+
+    modoInfinito.segundosDecorridos10s++;
+    modoInfinito.segundosDecorridos5m++;
+
+    // ---- Atualiza barras de progresso ----
+    const bar10s = document.getElementById('inf-bar-10s');
+    const bar5m  = document.getElementById('inf-bar-5m');
+    const lbl10s = document.getElementById('inf-bonus-10s');
+    const lbl5m  = document.getElementById('inf-bonus-5m');
+
+    const pct10s = (modoInfinito.segundosDecorridos10s / 10) * 100;
+    const pct5m  = (modoInfinito.segundosDecorridos5m / 60) * 100;
+
+    if (bar10s) bar10s.style.width = `${Math.min(100, pct10s)}%`;
+    if (bar5m)  bar5m.style.width  = `${Math.min(100, pct5m)}%`;
+
+    const resta10s = 10 - modoInfinito.segundosDecorridos10s;
+    const resta5m  = 60 - modoInfinito.segundosDecorridos5m;
+    if (lbl10s) lbl10s.textContent = resta10s > 0 ? `${resta10s}s` : '✓';
+    if (lbl5m) {
+      const m = Math.floor(resta5m / 60);
+      const s = resta5m % 60;
+      lbl5m.textContent = resta5m > 0 ? `${m}:${String(s).padStart(2,'0')}` : '✓';
+    }
+
+    // ---- Bônus de 10 segundos: +R$50 ----
+    if (modoInfinito.segundosDecorridos10s >= 10) {
+      modoInfinito.segundosDecorridos10s = 0;
+      const bonus = 50;
+      estado.saldo += bonus;
+      modoInfinito.totalBonus += bonus;
+      audio.tocarSom('moeda');
+      infAnimarSaldo(bonus, true);
+      infAtualizarHUD();
+      infMostrarToastBonus(`⏱️ BÔNUS +R$50 RECEBIDO!`, 'cyan');
+      if (bar10s) bar10s.style.width = '0%';
+      if (lbl10s) lbl10s.textContent = '10s';
+    }
+
+    // ---- Bônus de 1 minuto: +R$1500 ----
+    if (modoInfinito.segundosDecorridos5m >= 60) {
+      modoInfinito.segundosDecorridos5m = 0;
+      const bonus = 1500;
+      estado.saldo += bonus;
+      modoInfinito.totalBonus += bonus;
+      audio.tocarSom('fanfarra');
+      infAnimarSaldo(bonus, true);
+      infAtualizarHUD();
+      infMostrarToastBonus(`🏆 MEGA BÔNUS +R$1.500 RECEBIDO (1 MIN)!`, 'gold');
+      if (bar5m) bar5m.style.width = '0%';
+      if (lbl5m) lbl5m.textContent = '1:00';
+    }
+
+  }, 1000);
+}
+
+/**
+ * Para o loop de bônus
+ */
+function infPararBonusLoop() {
+  if (modoInfinito.intervalo) {
+    clearInterval(modoInfinito.intervalo);
+    modoInfinito.intervalo = null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* PATCH DO SISTEMA DE APOSTAS PARA O MODO INFINITO                    */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Aplica e remove um "patch" temporário no sistema de apostas
+ * para redirecionar para as funções do Modo Infinito.
+ * Enquanto o modo infinito está ativo, as funções de apostas
+ * usam infObterValorAposta() e infRegistrarHistorico().
+ */
+let _infPatchAtivo = false;
+const _infOrigObter = null;
+
+/* ------------------------------------------------------------------ */
+/* JOGO SELECIONADO NO MODO INFINITO                                   */
+/* ------------------------------------------------------------------ */
+
+function infSelecionarJogo(nomeJogo) {
+  // Para qualquer animação de Crash se estava rodando
+  if (modoInfinito.subjogos.crash.animacaoId) {
+    cancelAnimationFrame(modoInfinito.subjogos.crash.animacaoId);
+    modoInfinito.subjogos.crash.ativo = false;
+  }
+
+  modoInfinito.jogoAtivo = nomeJogo;
+
+  // Atualiza tabs
+  document.querySelectorAll('.inf-game-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.infGame === nomeJogo);
+  });
+
+  // O viewport do modo infinito mostra uma cópia/clone da tela do jogo
+  infRenderizarJogoAtivo(nomeJogo);
+}
+
+/**
+ * Clona e exibe a tela do jogo escolhido dentro do viewport infinito.
+ * Reatribui IDs para evitar colisão com o modo padrão usando prefixo "inf2-".
+ * Em vez de clonar (complexo e frágil), usamos uma abordagem de troca de contexto:
+ * quando o modo infinito está ativo, substituímos temporariamente as referências
+ * de estado para apontar para modoInfinito.subjogos.
+ */
+function infRenderizarJogoAtivo(nomeJogo) {
+  const viewport = document.getElementById('inf-games-viewport');
+  if (!viewport) return;
+
+  // Busca a tela original do jogo e clona
+  const original = document.getElementById(`game-${nomeJogo}`);
+  if (!original) return;
+
+  // Limpa viewport
+  viewport.innerHTML = '';
+
+  // Clona profundo
+  const clone = original.cloneNode(true);
+  clone.id = `inf-game-${nomeJogo}`;
+  clone.classList.add('active');
+
+  // Ajusta IDs e data-atributos dos elementos do clone para evitar colisão
+  clone.querySelectorAll('[id]').forEach(el => {
+    el.id = `inf2-${el.id}`;
+  });
+  clone.querySelectorAll('[for]').forEach(el => {
+    el.htmlFor = `inf2-${el.htmlFor}`;
+  });
+
+  viewport.appendChild(clone);
+
+  // Reinicializa canvas da roleta se necessário
+  if (nomeJogo === 'roleta') {
+    const cloneCanvas = clone.querySelector('canvas');
+    if (cloneCanvas) {
+      cloneCanvas.id = 'inf2-wheel-canvas';
+      setTimeout(() => infDesenharRoleta(cloneCanvas), 50);
+    }
+  }
+
+  // Reinicializa canvas do crash se necessário
+  if (nomeJogo === 'crash') {
+    const cloneCanvas = clone.querySelector('#inf2-crash-canvas');
+    if (cloneCanvas) {
+      setTimeout(() => infDesenharCrashCena(cloneCanvas, 1.0, false), 50);
+    }
+  }
+
+  // Rebinda os eventos no clone
+  infBindarEventosClone(clone, nomeJogo);
+}
+
+/**
+ * Desenha a roda da sorte no canvas do clone
+ */
+function infDesenharRoleta(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const segs = CONFIG.jogos.roleta.segmentos;
+  const total = segs.reduce((a, s) => a + s.prob, 0);
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r  = cx - 10;
+  let angulo = modoInfinito.subjogos.roleta.anguloAtual || 0;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  segs.forEach(seg => {
+    const fatia = (seg.prob / total) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, angulo, angulo + fatia);
+    ctx.closePath();
+    ctx.fillStyle = seg.cor;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Texto
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angulo + fatia / 2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = seg.textoCor;
+    ctx.font = `bold ${Math.max(10, r * 0.11)}px Orbitron`;
+    ctx.fillText(seg.label, r - 12, 5);
+    ctx.restore();
+
+    angulo += fatia;
+  });
+}
+
+/**
+ * Desenha cena do Crash no clone com animação completa do foguete e curva Bézier
+ */
+function infDesenharCrashCena(canvas, multiplicador, explodiu = false) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width || 680;
+  const h = canvas.height || 340;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Fundo grade espacial
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < w; x += 40) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+  for (let y = 0; y < h; y += 40) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  // Trajetória do foguete (Curva Bézier exponencial)
+  const progresso = Math.min(1.0, (multiplicador - 1.0) / 4.0);
+  const startX = 40;
+  const startY = h - 40;
+  const endX = startX + (w - 120) * progresso;
+  const endY = startY - (h - 90) * progresso;
+
+  ctx.beginPath();
+  ctx.moveTo(startX, startY);
+  ctx.quadraticCurveTo(startX + (endX - startX) * 0.4, startY, endX, endY);
+  ctx.strokeStyle = explodiu ? '#ff3366' : '#00f2fe';
+  ctx.lineWidth = 4;
+  ctx.shadowColor = explodiu ? '#ff3366' : '#00f2fe';
+  ctx.shadowBlur = 15;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Foguete ou Explosão
+  if (explodiu) {
+    ctx.font = '36px Arial';
+    ctx.fillText('💥', endX - 18, endY + 12);
+  } else {
+    ctx.font = '28px Arial';
+    ctx.fillText('🚀', endX - 14, endY + 10);
+  }
+}
+
+/**
+ * Rebinda todos os botões de ação do clone clonado para usar o estado do Modo Infinito
+ */
+function infBindarEventosClone(clone, nomeJogo) {
+  // Função auxiliar para pegar valor de aposta do painel inf
+  const getAposta = () => infObterValorAposta();
+
+  // Função auxiliar: debita do saldo compartilhado
+  const debitar = (valor) => {
+    if (valor > estado.saldo || valor <= 0) return false;
+    estado.saldo -= valor;
+    infAnimarSaldo(valor, false);
+    infAtualizarHUD();
+    audio.tocarSom('aposta');
+    return true;
+  };
+
+  // Função auxiliar: credita vitória
+  const creditar = (valorGanho, mult, jogo, apostado) => {
+    estado.saldo += valorGanho;
+    audio.tocarSom('vitoria');
+    infAnimarSaldo(valorGanho, true);
+    infRegistrarHistorico(jogo, apostado, true, valorGanho, mult);
+    infExibirFeedback(`VOCÊ GANHOU +${formatarMoeda(valorGanho)} (x${mult.toFixed(2)})!`, true, '🎉');
+    infAtualizarHUD();
+    if (estado.saldo <= 0) {
+      infExibirFeedback('Saldo zerado! Aguarde o bônus automático!', false, '💀');
+    }
+  };
+
+  // Função auxiliar: registra derrota
+  const perder = (jogo, apostado, mult = 0) => {
+    audio.tocarSom('derrota');
+    infRegistrarHistorico(jogo, apostado, false, 0, mult);
+    infExibirFeedback(`VOCÊ PERDEU -${formatarMoeda(apostado)}`, false, '💀');
+    infAtualizarHUD();
+  };
+
+  switch (nomeJogo) {
+    case 'moeda': {
+      // Botões de escolha
+      clone.querySelectorAll('.choice-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          audio.tocarSom('click');
+          clone.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          modoInfinito.subjogos.moeda.escolha = btn.dataset.choice;
+        });
+      });
+      // Botão jogar
+      const btnJogar = clone.querySelector('[id^="inf2-btn-play-moeda"]') || clone.querySelector('.btn-play-primary');
+      if (btnJogar) {
+        btnJogar.addEventListener('click', () => {
+          const aposta = getAposta();
+          if (!debitar(aposta)) return;
+
+          const escolha = modoInfinito.subjogos.moeda.escolha;
+          const ganhou = Math.random() < CONFIG.jogos.moeda.chanceVitoria;
+          const resultadoReal = ganhou === (escolha === 'cara') ? escolha : (escolha === 'cara' ? 'coroa' : 'cara');
+
+          // Animação da moeda
+          const coinEl = clone.querySelector('[id^="inf2-coin-element"]') || clone.querySelector('.coin-3d');
+          const labelEl = clone.querySelector('[id^="inf2-coin-result-label"]') || clone.querySelector('.coin-result-label');
+
+          if (coinEl) {
+            const flips = 6 + Math.floor(Math.random() * 4);
+            coinEl.style.transition = `transform ${0.8 + flips * 0.05}s ease-out`;
+            const finalRot = resultadoReal === 'cara' ? flips * 360 : flips * 360 + 180;
+            coinEl.style.transform = `rotateY(${finalRot}deg)`;
+          }
+
+          const acertou = resultadoReal === escolha;
+          setTimeout(() => {
+            if (labelEl) labelEl.textContent = resultadoReal.toUpperCase() + (acertou ? ' ✓' : ' ✗');
+            if (acertou) {
+              const retorno = Math.floor(aposta * CONFIG.jogos.moeda.multiplicador);
+              creditar(retorno, CONFIG.jogos.moeda.multiplicador, 'Cara ou Coroa', aposta);
+            } else {
+              perder('Cara ou Coroa', aposta, CONFIG.jogos.moeda.multiplicador);
+            }
+          }, 900);
+        });
+      }
+      break;
+    }
+
+    case 'dados': {
+      clone.querySelectorAll('.dice-opt-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          audio.tocarSom('click');
+          clone.querySelectorAll('.dice-opt-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          modoInfinito.subjogos.dados.tipo = btn.dataset.type;
+          const exactBox = clone.querySelector('[id^="inf2-dice-exact-numbers"]') || clone.querySelector('.dice-exact-selector');
+          if (exactBox) {
+            exactBox.classList.toggle('show', btn.dataset.type === 'exato');
+          }
+        });
+      });
+      clone.querySelectorAll('.exact-num-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          audio.tocarSom('click');
+          clone.querySelectorAll('.exact-num-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          modoInfinito.subjogos.dados.numeroExato = parseInt(btn.dataset.num);
+        });
+      });
+      const btnJogar = clone.querySelector('.btn-play-primary');
+      if (btnJogar) {
+        btnJogar.addEventListener('click', () => {
+          const aposta = getAposta();
+          if (!debitar(aposta)) return;
+          const resultado = Math.ceil(Math.random() * 6);
+          const diceEl = clone.querySelector('.dice-3d') || clone.querySelector('[id^="inf2-dice-element"]');
+          const labelEl = clone.querySelector('[id^="inf2-dice-result-label"]') || clone.querySelector('.dice-result-label');
+
+          if (diceEl) {
+            diceEl.setAttribute('data-face', resultado);
+            const rotMap = { 1:[0,0], 2:[0,270], 3:[270,0], 4:[90,0], 5:[0,90], 6:[0,180] };
+            const [rx, ry] = rotMap[resultado] || [0, 0];
+            diceEl.style.transition = 'transform 0.7s ease-out';
+            diceEl.style.transform = `rotateX(${360*2 + rx}deg) rotateY(${360*2 + ry}deg)`;
+          }
+
+          const tipo = modoInfinito.subjogos.dados.tipo;
+          let acertou = false;
+          let mult = 0;
+          if (tipo === 'baixo')  { acertou = resultado <= 3; mult = CONFIG.jogos.dados.baixo.multiplicador; }
+          if (tipo === 'alto')   { acertou = resultado >= 4; mult = CONFIG.jogos.dados.alto.multiplicador; }
+          if (tipo === 'exato')  { acertou = resultado === modoInfinito.subjogos.dados.numeroExato; mult = CONFIG.jogos.dados.exato.multiplicador; }
+
+          setTimeout(() => {
+            if (labelEl) labelEl.textContent = `Resultado: ${resultado} — ${acertou ? 'ACERTOU!' : 'ERROU!'}`;
+            if (acertou) {
+              creditar(Math.floor(aposta * mult), mult, 'Dados', aposta);
+            } else {
+              perder('Dados', aposta, mult);
+            }
+          }, 800);
+        });
+      }
+      break;
+    }
+
+    case 'roleta': {
+      const btnJogar = clone.querySelector('.btn-play-primary');
+      if (btnJogar) {
+        btnJogar.addEventListener('click', () => {
+          const aposta = getAposta();
+          if (!debitar(aposta)) return;
+          if (modoInfinito.subjogos.roleta.girando) return;
+          modoInfinito.subjogos.roleta.girando = true;
+
+          const segs = CONFIG.jogos.roleta.segmentos;
+          const rand = Math.random();
+          let acum = 0, segEscolhido = segs[segs.length - 1];
+          for (const s of segs) { acum += s.prob; if (rand < acum) { segEscolhido = s; break; } }
+
+          const canvas = clone.querySelector('canvas');
+          const labelEl = clone.querySelector('[id^="inf2-wheel-result-label"]') || clone.querySelector('.wheel-result-label');
+
+          let vel = 0.25 + Math.random() * 0.15;
+          let ang = modoInfinito.subjogos.roleta.anguloAtual;
+          const duracao = 4000 + Math.random() * 2000;
+          const tInicio = performance.now();
+
+          function animarRoleta(agora) {
+            const decorrido = agora - tInicio;
+            const progress = Math.min(decorrido / duracao, 1);
+            const ease = 1 - Math.pow(1 - progress, 3);
+            ang += vel * (1 - ease * 0.95);
+            modoInfinito.subjogos.roleta.anguloAtual = ang;
+            infDesenharRoleta(canvas);
+            if (progress < 1) {
+              requestAnimationFrame(animarRoleta);
+            } else {
+              modoInfinito.subjogos.roleta.girando = false;
+              if (labelEl) labelEl.textContent = `Resultado: ${segEscolhido.label}`;
+              if (segEscolhido.mult > 0) {
+                creditar(Math.floor(aposta * segEscolhido.mult), segEscolhido.mult, 'Roda da Sorte', aposta);
+              } else {
+                perder('Roda da Sorte', aposta, 0);
+                if (labelEl) labelEl.textContent = `PERDE TUDO! 💀`;
+              }
+            }
+          }
+          requestAnimationFrame(animarRoleta);
+        });
+      }
+      break;
+    }
+
+    case 'highlow': {
+      if (!modoInfinito.subjogos.highlow.cartaAtual) {
+        modoInfinito.subjogos.highlow.cartaAtual = gerarCartaAleatoria();
+      }
+      const cartaAtualEl = clone.querySelector('[id^="inf2-hl-card-current"]') || clone.querySelector('.playing-card');
+      if (cartaAtualEl) {
+        renderizarCartaNo(cartaAtualEl, modoInfinito.subjogos.highlow.cartaAtual, false);
+      }
+
+      clone.querySelectorAll('.mode-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          audio.tocarSom('click');
+          clone.querySelectorAll('.mode-toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          modoInfinito.subjogos.highlow.modo = btn.dataset.mode;
+          const stdDiv  = clone.querySelector('[id^="inf2-hl-actions-std"]') || clone.querySelector('#hl-actions-std');
+          const riskDiv = clone.querySelector('[id^="inf2-hl-actions-risk"]') || clone.querySelector('#hl-actions-risk');
+          if (btn.dataset.mode === 'std') {
+            if (stdDiv)  stdDiv.classList.remove('hidden');
+            if (riskDiv) riskDiv.classList.add('hidden');
+          } else {
+            if (stdDiv)  stdDiv.classList.add('hidden');
+            if (riskDiv) riskDiv.classList.remove('hidden');
+          }
+        });
+      });
+      clone.querySelectorAll('.hl-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          audio.tocarSom('click');
+          btn.parentElement.querySelectorAll('.hl-action-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          modoInfinito.subjogos.highlow.predicao = btn.dataset.pred;
+        });
+      });
+
+      const btnJogar = clone.querySelector('[id^="inf2-btn-play-highlow"]') || clone.querySelector('.btn-play-primary');
+      if (btnJogar) {
+        btnJogar.addEventListener('click', () => {
+          const aposta = getAposta();
+          if (!debitar(aposta)) return;
+
+          const cartaAtual = modoInfinito.subjogos.highlow.cartaAtual;
+          const proxCarta  = gerarCartaAleatoria();
+          const pred = modoInfinito.subjogos.highlow.predicao;
+          const modo = modoInfinito.subjogos.highlow.modo;
+
+          let acertou = false;
+          let mult = CONFIG.jogos.highlow.padrao.multiplicador;
+
+          if (modo === 'std') {
+            acertou = pred === 'high' ? proxCarta.valor > cartaAtual.valor : proxCarta.valor < cartaAtual.valor;
+          } else {
+            if (pred === 'super_high') {
+              acertou = proxCarta.valor >= CONFIG.jogos.highlow.superHigh.minCarta;
+              mult = CONFIG.jogos.highlow.superHigh.multiplicador;
+            } else {
+              acertou = proxCarta.valor <= CONFIG.jogos.highlow.superLow.maxCarta;
+              mult = CONFIG.jogos.highlow.superLow.multiplicador;
+            }
+          }
+
+          const proxCartaEl = clone.querySelector('[id^="inf2-hl-card-next"]') || clone.querySelectorAll('.playing-card')[1];
+          if (proxCartaEl) renderizarCartaNo(proxCartaEl, proxCarta, false);
+
+          if (acertou) {
+            creditar(Math.floor(aposta * mult), mult, 'High / Low', aposta);
+          } else {
+            perder('High / Low', aposta, mult);
+          }
+
+          modoInfinito.subjogos.highlow.cartaAtual = proxCarta;
+          setTimeout(() => {
+            if (cartaAtualEl) renderizarCartaNo(cartaAtualEl, proxCarta, false);
+            if (proxCartaEl)  renderizarCartaNo(proxCartaEl, null, true);
+          }, 600);
+        });
+      }
+      break;
+    }
+
+    case 'minas': {
+      const msub = modoInfinito.subjogos.minas;
+      const board = clone.querySelector('[id^="inf2-mines-board"]');
+      const btnStart = clone.querySelector('[id^="inf2-btn-start-minas"]');
+      const btnCash = clone.querySelector('[id^="inf2-btn-cashout-minas"]');
+      const btnCashVal = clone.querySelector('[id^="inf2-btn-cashout-minas-val"]');
+      const selectMinas = clone.querySelector('[id^="inf2-select-mines-count"]');
+      const txtSafe = clone.querySelector('[id^="inf2-mines-safe-clicks"]');
+      const txtNext = clone.querySelector('[id^="inf2-mines-next-mult"]');
+      const txtCash = clone.querySelector('[id^="inf2-mines-cashout-val"]');
+      const txtMult = clone.querySelector('[id^="inf2-minas-current-mult"]');
+      const msgEl = clone.querySelector('[id^="inf2-mines-overlay-msg"]');
+
+      const atualizarUI = () => {
+        const acertos = msub.revelados.length;
+        const proxMult = calcularMultiplicadorMinas(msub.quantidadeMinas, acertos + 1);
+        const valorSaque = Math.round(msub.apostaAtual * msub.multiplicadorAtual);
+
+        if (txtSafe) txtSafe.textContent = String(acertos);
+        if (txtNext) txtNext.textContent = `x${proxMult.toFixed(2)}`;
+        if (txtCash) txtCash.textContent = formatarMoeda(valorSaque);
+        if (txtMult) txtMult.textContent = `x${msub.multiplicadorAtual.toFixed(2)}`;
+        if (btnCashVal) btnCashVal.textContent = formatarMoeda(valorSaque);
+      };
+
+      const inicializarTabuleiro = () => {
+        if (!board) return;
+        board.innerHTML = '';
+        for (let i = 0; i < 25; i++) {
+          const tile = document.createElement('div');
+          tile.className = 'mine-tile';
+          tile.dataset.index = i;
+          tile.innerHTML = '💎';
+          tile.addEventListener('click', () => clicarCasa(i));
+          board.appendChild(tile);
+        }
+      };
+
+      const clicarCasa = (index) => {
+        if (!msub.ativo || msub.revelados.includes(index)) return;
+
+        msub.revelados.push(index);
+        const tile = board?.children[index];
+        if (!tile) return;
+
+        if (msub.tabuleiro[index]) {
+          // BOMBA!
+          tile.classList.add('revealed-bomb');
+          tile.innerHTML = '💣';
+          audio.tocarSom('explosao');
+
+          // Revela todas as bombas e desativa tabuleiro
+          board.querySelectorAll('.mine-tile').forEach((t, idx) => {
+            t.classList.add('disabled');
+            if (msub.tabuleiro[idx]) {
+              t.classList.add('revealed-bomb');
+              t.innerHTML = '💣';
+            } else if (!msub.revelados.includes(idx)) {
+              t.innerHTML = '💎';
+              t.style.opacity = '0.4';
+            }
+          });
+
+          msub.ativo = false;
+          if (btnStart) btnStart.classList.remove('hidden');
+          if (btnCash) btnCash.classList.add('hidden');
+          if (msgEl) msgEl.textContent = 'Você pisou em uma mina! Configure a aposta e tente novamente.';
+          perder('Minas (5x5)', msub.apostaAtual, 0);
+        } else {
+          // DIAMANTE!
+          tile.classList.add('revealed-gem');
+          tile.innerHTML = '💎';
+          audio.tocarSom('diamante');
+
+          const acertos = msub.revelados.length;
+          msub.multiplicadorAtual = calcularMultiplicadorMinas(msub.quantidadeMinas, acertos);
+          atualizarUI();
+
+          const totalSeguras = 25 - msub.quantidadeMinas;
+          if (acertos >= totalSeguras) {
+            sacarMinas();
+          }
+        }
+      };
+
+      const sacarMinas = () => {
+        if (!msub.ativo || msub.revelados.length === 0) return;
+        msub.ativo = false;
+        const ganho = Math.round(msub.apostaAtual * msub.multiplicadorAtual);
+        creditar(ganho, msub.multiplicadorAtual, 'Minas (5x5)', msub.apostaAtual);
+
+        // Desabilita tabuleiro e mostra bombas restantes
+        board?.querySelectorAll('.mine-tile').forEach((t, idx) => {
+          t.classList.add('disabled');
+          if (msub.tabuleiro[idx]) {
+            t.innerHTML = '💣';
+            t.style.opacity = '0.4';
+          }
+        });
+
+        if (btnStart) btnStart.classList.remove('hidden');
+        if (btnCash) btnCash.classList.add('hidden');
+        if (msgEl) msgEl.textContent = `Saque realizado com sucesso! Ganho: ${formatarMoeda(ganho)}`;
+      };
+
+      if (btnStart) {
+        btnStart.addEventListener('click', () => {
+          if (msub.ativo) return;
+          const aposta = getAposta();
+          if (!debitar(aposta)) return;
+
+          const numMinas = selectMinas ? parseInt(selectMinas.value) : 3;
+
+          const casas = new Array(25).fill(false);
+          let minasColocadas = 0;
+          while (minasColocadas < numMinas) {
+            const idx = Math.floor(Math.random() * 25);
+            if (!casas[idx]) {
+              casas[idx] = true;
+              minasColocadas++;
+            }
+          }
+
+          msub.ativo = true;
+          msub.quantidadeMinas = numMinas;
+          msub.apostaAtual = aposta;
+          msub.tabuleiro = casas;
+          msub.revelados = [];
+          msub.multiplicadorAtual = 1.0;
+
+          inicializarTabuleiro();
+          btnStart.classList.add('hidden');
+          btnCash.classList.remove('hidden');
+          if (msgEl) msgEl.textContent = 'Clique nas casas para revelar diamantes ou saque a qualquer momento!';
+
+          atualizarUI();
+        });
+      }
+
+      if (btnCash) {
+        btnCash.addEventListener('click', () => {
+          sacarMinas();
+        });
+      }
+
+      inicializarTabuleiro();
+      atualizarUI();
+      break;
+    }
+
+    case 'blackjack': {
+      const bjSub = modoInfinito.subjogos.blackjack;
+      const btnDeal = clone.querySelector('[id^="inf2-btn-bj-deal"]');
+      const inGameActions = clone.querySelector('[id^="inf2-bj-in-game-actions"]');
+      const btnHit = clone.querySelector('[id^="inf2-btn-bj-hit"]');
+      const btnStand = clone.querySelector('[id^="inf2-btn-bj-stand"]');
+      const btnDouble = clone.querySelector('[id^="inf2-btn-bj-double"]');
+      const msgEl = clone.querySelector('[id^="inf2-bj-status-msg"]');
+      const pCardsContainer = clone.querySelector('[id^="inf2-bj-player-cards"]');
+      const dCardsContainer = clone.querySelector('[id^="inf2-bj-dealer-cards"]');
+      const pScore = clone.querySelector('[id^="inf2-bj-player-score"]');
+      const dScore = clone.querySelector('[id^="inf2-bj-dealer-score"]');
+
+      const renderMao = (container, mao, ocultarSegundo = false) => {
+        if (!container) return;
+        container.innerHTML = '';
+        mao.forEach((c, idx) => {
+          const cardEl = document.createElement('div');
+          if (ocultarSegundo && idx === 1) {
+            cardEl.className = 'bj-card bj-card-back';
+            cardEl.textContent = '♠';
+          } else {
+            const nome = NOMES_CARTAS[c.valor] || c.valor;
+            cardEl.className = `bj-card ${c.ehVermelho ? 'red' : ''}`;
+            cardEl.innerHTML = `
+              <div>${nome}</div>
+              <div style="font-size: 1.2rem; align-self: center;">${c.naipe}</div>
+              <div style="align-self: flex-end; transform: rotate(180deg);">${nome}</div>
+            `;
+          }
+          container.appendChild(cardEl);
+        });
+      };
+
+      const atualizarUI = () => {
+        renderMao(pCardsContainer, bjSub.maoJogador, false);
+        renderMao(dCardsContainer, bjSub.maoDealer, bjSub.dealerOculto);
+        if (pScore) pScore.textContent = String(calcularPontosBlackjack(bjSub.maoJogador));
+        if (dScore) {
+          if (bjSub.dealerOculto && bjSub.maoDealer.length > 0) {
+            dScore.textContent = '?';
+          } else {
+            dScore.textContent = String(calcularPontosBlackjack(bjSub.maoDealer));
+          }
+        }
+      };
+
+      const finalizarBJ = () => {
+        bjSub.dealerOculto = false;
+        let pontosDealer = calcularPontosBlackjack(bjSub.maoDealer);
+        const pontosJogador = calcularPontosBlackjack(bjSub.maoJogador);
+
+        if (pontosJogador <= 21) {
+          while (pontosDealer < 17) {
+            bjSub.maoDealer.push(bjSub.baralho.pop());
+            pontosDealer = calcularPontosBlackjack(bjSub.maoDealer);
+          }
+        }
+
+        atualizarUI();
+
+        const aposta = bjSub.apostaAtual;
+        if (pontosJogador > 21) {
+          if (msgEl) msgEl.textContent = `VOCÊ ESTOUROU COM ${pontosJogador} PONTOS!`;
+          perder('Blackjack 21', aposta, 0);
+        } else if (pontosJogador === 21 && bjSub.maoJogador.length === 2 && pontosDealer !== 21) {
+          const ganho = Math.round(aposta * CONFIG.jogos.blackjack.pagamentoBlackjack);
+          if (msgEl) msgEl.textContent = 'BLACKJACK NATURAL (21)! PAGAMENTO x2.5';
+          creditar(ganho, CONFIG.jogos.blackjack.pagamentoBlackjack, 'Blackjack 21', aposta);
+        } else if (pontosDealer > 21) {
+          const ganho = aposta * 2;
+          if (msgEl) msgEl.textContent = `O DEALER ESTOUROU COM ${pontosDealer}! VOCÊ VENCEU!`;
+          creditar(ganho, 2.0, 'Blackjack 21', aposta);
+        } else if (pontosJogador > pontosDealer) {
+          const ganho = aposta * 2;
+          if (msgEl) msgEl.textContent = `VOCÊ VENCEU A BANCA (${pontosJogador} vs ${pontosDealer})!`;
+          creditar(ganho, 2.0, 'Blackjack 21', aposta);
+        } else if (pontosJogador === pontosDealer) {
+          estado.saldo += aposta;
+          if (msgEl) msgEl.textContent = `EMPATE (${pontosJogador} vs ${pontosDealer})! APOSTA DEVOLVIDA.`;
+          infExibirFeedback('Empate no Blackjack — Aposta devolvida', true, '🤝');
+          infRegistrarHistorico('Blackjack 21', aposta, true, aposta, 1.0);
+          infAtualizarHUD();
+        } else {
+          if (msgEl) msgEl.textContent = `O DEALER VENCEU (${pontosDealer} vs ${pontosJogador})!`;
+          perder('Blackjack 21', aposta, 0);
+        }
+
+        bjSub.ativo = false;
+        if (btnDeal) btnDeal.classList.remove('hidden');
+        if (inGameActions) inGameActions.classList.add('hidden');
+      };
+
+      if (btnDeal) {
+        btnDeal.addEventListener('click', () => {
+          if (bjSub.ativo) return;
+          const aposta = getAposta();
+          if (!debitar(aposta)) return;
+
+          bjSub.baralho = criarBaralhoBlackjack();
+          bjSub.maoJogador = [bjSub.baralho.pop(), bjSub.baralho.pop()];
+          bjSub.maoDealer = [bjSub.baralho.pop(), bjSub.baralho.pop()];
+          bjSub.apostaAtual = aposta;
+          bjSub.ativo = true;
+          bjSub.dealerOculto = true;
+
+          btnDeal.classList.add('hidden');
+          if (inGameActions) inGameActions.classList.remove('hidden');
+          if (btnDouble) btnDouble.disabled = estado.saldo < aposta;
+          if (msgEl) msgEl.textContent = 'Comprar (Hit), Parar (Stand) ou Dobrar (2x)?';
+
+          audio.tocarSom('moeda');
+          atualizarUI();
+
+          if (calcularPontosBlackjack(bjSub.maoJogador) === 21) {
+            finalizarBJ();
+          }
+        });
+      }
+
+      if (btnHit) {
+        btnHit.addEventListener('click', () => {
+          if (!bjSub.ativo) return;
+          bjSub.maoJogador.push(bjSub.baralho.pop());
+          audio.tocarSom('moeda');
+          if (btnDouble) btnDouble.disabled = true;
+          atualizarUI();
+          if (calcularPontosBlackjack(bjSub.maoJogador) >= 21) {
+            finalizarBJ();
+          }
+        });
+      }
+
+      if (btnStand) {
+        btnStand.addEventListener('click', () => {
+          if (!bjSub.ativo) return;
+          audio.tocarSom('click');
+          finalizarBJ();
+        });
+      }
+
+      if (btnDouble) {
+        btnDouble.addEventListener('click', () => {
+          if (!bjSub.ativo || estado.saldo < bjSub.apostaAtual) return;
+          debitar(bjSub.apostaAtual);
+          bjSub.apostaAtual *= 2;
+          bjSub.maoJogador.push(bjSub.baralho.pop());
+          audio.tocarSom('moeda');
+          atualizarUI();
+          finalizarBJ();
+        });
+      }
+      break;
+    }
+
+    case 'crash': {
+      const csub = modoInfinito.subjogos.crash;
+      const btnStart = clone.querySelector('[id^="inf2-btn-crash-start"]');
+      const btnCash = clone.querySelector('[id^="inf2-btn-crash-cashout"]');
+      const cashVal = clone.querySelector('[id^="inf2-btn-crash-cashout-val"]');
+      const canvas = clone.querySelector('[id^="inf2-crash-canvas"]');
+      const multEl = clone.querySelector('[id^="inf2-crash-live-mult"]');
+      const stateTag = clone.querySelector('[id^="inf2-crash-state-tag"]');
+
+      if (canvas) {
+        infDesenharCrashCena(canvas, 1.0, false);
+      }
+
+      if (btnStart) {
+        btnStart.addEventListener('click', () => {
+          if (csub.ativo) return;
+          const aposta = getAposta();
+          if (!debitar(aposta)) return;
+
+          csub.apostaAtual = aposta;
+          csub.ativo = true;
+          csub.sacou = false;
+          csub.multiplicadorAtual = 1.00;
+          csub.tempoInicio = performance.now();
+          csub.pontoCrash = gerarPontoCrash();
+
+          btnStart.classList.add('hidden');
+          if (btnCash) btnCash.classList.remove('hidden');
+          if (stateTag) stateTag.textContent = 'FOGUETE EM VOO!';
+          if (cashVal) cashVal.textContent = formatarMoeda(aposta);
+          if (multEl) multEl.classList.remove('crashed');
+
+          function loopAnimacao() {
+            if (!csub.ativo) return;
+            const agora = performance.now();
+            const decorrido = (agora - csub.tempoInicio) / 1000;
+            csub.multiplicadorAtual = Number((Math.pow(Math.E, 0.15 * decorrido)).toFixed(2));
+
+            if (multEl) multEl.textContent = `${csub.multiplicadorAtual.toFixed(2)}x`;
+            if (cashVal) cashVal.textContent = formatarMoeda(Math.round(csub.apostaAtual * csub.multiplicadorAtual));
+
+            infDesenharCrashCena(canvas, csub.multiplicadorAtual, false);
+
+            if (csub.multiplicadorAtual >= csub.pontoCrash) {
+              csub.ativo = false;
+              if (csub.animacaoId) cancelAnimationFrame(csub.animacaoId);
+              audio.tocarSom('explosao');
+              infDesenharCrashCena(canvas, csub.pontoCrash, true);
+
+              if (multEl) {
+                multEl.textContent = `${csub.pontoCrash.toFixed(2)}x`;
+                multEl.classList.add('crashed');
+              }
+              if (stateTag) stateTag.textContent = 'CRASHED! O FOGUETE EXPLODIU.';
+
+              if (!csub.sacou) {
+                perder('Crash Rocket', csub.apostaAtual, csub.pontoCrash);
+              }
+
+              if (btnCash) btnCash.classList.add('hidden');
+              setTimeout(() => {
+                if (btnStart) btnStart.classList.remove('hidden');
+                if (multEl) multEl.classList.remove('crashed');
+                if (stateTag) stateTag.textContent = 'AGUARDANDO NOVA APOSTA';
+              }, 2000);
+              return;
+            }
+            csub.animacaoId = requestAnimationFrame(loopAnimacao);
+          }
+          csub.animacaoId = requestAnimationFrame(loopAnimacao);
+        });
+      }
+
+      if (btnCash) {
+        btnCash.addEventListener('click', () => {
+          if (!csub.ativo || csub.sacou) return;
+          csub.sacou = true;
+          const multGanho = csub.multiplicadorAtual;
+          const ganho = Math.round(csub.apostaAtual * multGanho);
+          creditar(ganho, multGanho, 'Crash Rocket', csub.apostaAtual);
+          btnCash.classList.add('hidden');
+          if (stateTag) stateTag.textContent = `SACOU COM SUCESSO EM ${multGanho.toFixed(2)}x!`;
+        });
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Renderiza uma carta em um elemento específico (para o clone do High/Low)
+ */
+function renderizarCartaNo(el, carta, oculta) {
+  if (!el) return;
+  if (oculta || !carta) {
+    el.className = 'playing-card card-back';
+    el.innerHTML = `<div class="card-back-pattern">?</div>`;
+    return;
+  }
+  const nome = NOMES_CARTAS[carta.valor] || String(carta.valor);
+  el.className = `playing-card ${carta.ehVermelho ? 'red-suit' : ''}`;
+  el.innerHTML = `
+    <div class="card-corner top-left"><span class="c-val">${nome}</span><span class="c-suit">${carta.naipe}</span></div>
+    <div class="card-center-art">${carta.naipe}</div>
+    <div class="card-corner bottom-right"><span class="c-val">${nome}</span><span class="c-suit">${carta.naipe}</span></div>
+  `;
+}
+
+
+/* ------------------------------------------------------------------ */
+/* ENTRAR E SAIR DO MODO INFINITO                                       */
+/* ------------------------------------------------------------------ */
+
+function entrarModoInfinito() {
+  modoInfinito.ativo = true;
+
+  // Pausa o cronômetro do modo padrão
+  if (estado.intervaloTempo) {
+    clearInterval(estado.intervaloTempo);
+  }
+
+  // Mostra overlay
+  const overlay = document.getElementById('infinite-mode-overlay');
+  if (overlay) overlay.classList.remove('hidden');
+
+  // Atualiza HUD
+  infAtualizarHUD();
+
+  // Seleciona primeiro jogo
+  infSelecionarJogo('moeda');
+
+  // Inicia loop de bônus
+  infIniciarBonusLoop();
+
+  audio.tocarSom('fanfarra');
+}
+
+function sairModoInfinito() {
+  modoInfinito.ativo = false;
+
+  // Para o loop de bônus
+  infPararBonusLoop();
+
+  // Para qualquer Crash em andamento
+  modoInfinito.subjogos.crash.ativo = false;
+  if (modoInfinito.subjogos.crash.animacaoId) {
+    cancelAnimationFrame(modoInfinito.subjogos.crash.animacaoId);
+  }
+
+  // Esconde overlay
+  const overlay = document.getElementById('infinite-mode-overlay');
+  if (overlay) overlay.classList.add('hidden');
+
+  // Atualiza saldo no modo padrão
+  atualizarInterface();
+
+  // Retoma cronômetro se a partida estava ativa
+  if (estado.partidaAtiva && estado.tempoRestante > 0) {
+    iniciarCronometro();
+  }
+
+  audio.tocarSom('click');
+}
+
+/* ------------------------------------------------------------------ */
+/* EVENT LISTENERS DO MODO INFINITO                                     */
+/* ------------------------------------------------------------------ */
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Botão de entrada
+  document.getElementById('btn-infinite-mode')?.addEventListener('click', () => {
+    audio.init();
+    audio.tocarSom('click');
+    entrarModoInfinito();
+  });
+
+  // Botão de saída
+  document.getElementById('btn-exit-infinite')?.addEventListener('click', () => {
+    sairModoInfinito();
+  });
+
+  // Seletor de jogos do Modo Infinito
+  document.querySelectorAll('.inf-game-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      audio.tocarSom('click');
+      infSelecionarJogo(btn.dataset.infGame);
+    });
+  });
+
+  // Controles de aposta do Modo Infinito
+  const infInput = document.getElementById('inf-input-bet');
+
+  if (infInput) {
+    infInput.addEventListener('input', () => {
+      atualizarBadgePercentualAposta();
+    });
+  }
+
+  document.getElementById('inf-btn-bet-dec')?.addEventListener('click', () => {
+    audio.tocarSom('click');
+    const atual = Number(infInput?.value) || 10;
+    const step = atual > 1000 ? 500 : (atual > 100 ? 50 : (atual > 10 ? 10 : 1));
+    if (infInput) infInput.value = Math.max(1, atual - step);
+    atualizarBadgePercentualAposta();
+  });
+
+  document.getElementById('inf-btn-bet-inc')?.addEventListener('click', () => {
+    audio.tocarSom('click');
+    const atual = Number(infInput?.value) || 0;
+    const step = atual >= 1000 ? 500 : (atual >= 100 ? 50 : 10);
+    if (infInput) infInput.value = Math.min(estado.saldo, atual + step);
+    atualizarBadgePercentualAposta();
+  });
+
+  document.querySelectorAll('[data-inf-val]').forEach(chip => {
+    chip.addEventListener('click', () => {
+      audio.tocarSom('click');
+      const add = Number(chip.dataset.infVal);
+      const atual = Number(infInput?.value) || 0;
+      if (infInput) infInput.value = Math.min(estado.saldo, atual + add);
+      atualizarBadgePercentualAposta();
+    });
+  });
+
+  document.querySelectorAll('[data-inf-pct]').forEach(mod => {
+    mod.addEventListener('click', () => {
+      audio.tocarSom('click');
+      const pct = Number(mod.dataset.infPct);
+      if (infInput) infInput.value = Math.max(1, Math.floor((estado.saldo * pct) / 100));
+      atualizarBadgePercentualAposta();
+    });
+  });
+
+  document.getElementById('inf-btn-half')?.addEventListener('click', () => {
+    audio.tocarSom('click');
+    const atual = Number(infInput?.value) || 1;
+    if (infInput) infInput.value = Math.max(1, Math.floor(atual / 2));
+    atualizarBadgePercentualAposta();
+  });
+
+  document.getElementById('inf-btn-double')?.addEventListener('click', () => {
+    audio.tocarSom('click');
+    const atual = Number(infInput?.value) || 1;
+    if (infInput) infInput.value = Math.min(estado.saldo, atual * 2);
+    atualizarBadgePercentualAposta();
+  });
+
+  document.getElementById('inf-btn-clear')?.addEventListener('click', () => {
+    audio.tocarSom('click');
+    if (infInput) infInput.value = 10;
+    atualizarBadgePercentualAposta();
+  });
+});
 
