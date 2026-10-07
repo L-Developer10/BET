@@ -1309,7 +1309,8 @@ body {
   box-shadow: 0 0 12px var(--neon-cyan);
 }
 
-/* ================= JOGO 3: RODA DA SORTE ================= */
+/* ================= JOGO 3: ROLETA EUROPEIA ================= */
+.roulette-arena,
 .wheel-arena {
   display: flex;
   flex-direction: column;
@@ -1319,74 +1320,326 @@ body {
   padding: 10px 0;
 }
 
+.roulette-wheel-container,
 .wheel-outer-ring {
   position: relative;
-  width: 380px;
-  height: 380px;
+  width: 400px;
+  height: 400px;
+  max-width: 88vw;
+  max-height: 88vw;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  box-shadow: 0 0 30px rgba(176, 87, 255, 0.3), inset 0 0 20px rgba(0, 0, 0, 0.8);
+  background: radial-gradient(circle, #1a0f07 0%, #0d0805 75%, #2a1508 100%);
+  border: 7px solid #3d210b;
+  box-shadow: 
+    0 0 0 2px #d4af37, 
+    0 0 0 5px rgba(0, 0, 0, 0.8),
+    0 10px 35px rgba(0, 0, 0, 0.85),
+    0 0 35px rgba(212, 175, 55, 0.25);
 }
 
+.roulette-pointer-marker,
 .wheel-flapper {
   position: absolute;
-  top: -14px;
+  top: -16px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 1.8rem;
-  color: var(--neon-gold);
-  text-shadow: 0 0 10px var(--neon-gold);
+  font-size: 2rem;
+  color: #ffd700;
+  text-shadow: 0 0 10px #ffd700, 0 0 20px rgba(255, 215, 0, 0.8);
   z-index: 10;
   pointer-events: none;
+  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.9));
+  animation: pointer-pulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes pointer-pulse {
+  0% { transform: translateX(-50%) translateY(0); filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.8)); }
+  100% { transform: translateX(-50%) translateY(2px); filter: drop-shadow(0 4px 8px rgba(255, 215, 0, 0.6)); }
 }
 
 #wheel-canvas {
-  width: 380px;
-  height: 380px;
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
-  transition: transform 4.5s cubic-bezier(0.15, 0.9, 0.2, 1);
+  display: block;
+  box-shadow: inset 0 0 25px rgba(0, 0, 0, 0.85);
+  transform-origin: center center;
 }
 
+.roulette-center-turret,
 .wheel-center-hub {
   position: absolute;
-  width: 58px;
-  height: 58px;
-  background: radial-gradient(circle, #251842 0%, #0c0919 100%);
-  border: 3px solid var(--neon-gold);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 68px;
+  height: 68px;
+  background: radial-gradient(circle at 35% 35%, #ffd700 0%, #b8860b 45%, #4a3600 75%, #1a1400 100%);
+  border: 3px solid #ffe877;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.3rem;
-  box-shadow: 0 0 15px var(--neon-gold);
+  box-shadow: 0 0 20px rgba(255, 215, 0, 0.5), inset 0 0 8px rgba(255, 255, 255, 0.5);
   z-index: 5;
   pointer-events: none;
 }
 
-.wheel-odds-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  max-width: 650px;
-  margin: 0 auto;
+.turret-icon,
+.hub-icon {
+  font-size: 1.3rem;
+  color: #fff;
+  text-shadow: 0 0 8px #ffd700;
 }
 
-.odd-pill {
-  font-size: 0.75rem;
-  padding: 4px 10px;
-  border-radius: 20px;
-  border: 1px solid var(--border-color);
-  background: rgba(255, 255, 255, 0.03);
+/* Painel de Exibição do Resultado */
+.roulette-display-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.roulette-result-badge {
   display: flex;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 20px;
+  border-radius: 30px;
+  background: rgba(14, 19, 32, 0.95);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.6);
+  min-height: 46px;
 }
 
-.odd-pill.bad { border-color: rgba(255, 51, 102, 0.5); color: var(--neon-red); }
-.odd-pill.jackpot { border-color: rgba(255, 215, 0, 0.6); color: var(--neon-gold); background: rgba(255, 215, 0, 0.1); }
+.roulette-num-drawn {
+  font-family: var(--font-display);
+  font-size: 1.3rem;
+  font-weight: 800;
+  min-width: 36px;
+  padding: 3px 10px;
+  border-radius: 8px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  transition: all 0.3s ease;
+}
+
+.roulette-num-drawn.num-red {
+  background: #ff3366;
+  color: #fff;
+  box-shadow: 0 0 14px rgba(255, 51, 102, 0.7);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+.roulette-num-drawn.num-black {
+  background: #182030;
+  color: #f0f4fc;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+}
+
+.roulette-num-drawn.num-green {
+  background: #00ff88;
+  color: #0b0e14;
+  font-weight: 900;
+  box-shadow: 0 0 18px rgba(0, 255, 136, 0.85);
+}
+
+.roulette-color-drawn {
+  font-family: var(--font-sub);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-main);
+  text-transform: uppercase;
+}
+
+.wheel-result-label {
+  font-family: var(--font-sub);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: center;
+  min-height: 24px;
+}
+
+/* Botões de Aposta por Cor */
+.roulette-color-choices {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  width: 100%;
+  max-width: 650px;
+  margin: 4px auto 10px;
+}
+
+.roulette-choice-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(18, 24, 38, 0.85);
+  border: 2px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+.roulette-choice-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.roulette-choice-btn .choice-label {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.roulette-choice-btn .choice-payout {
+  font-family: var(--font-sub);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.btn-choice-red .choice-label { color: #ff5577; }
+.btn-choice-red:hover:not(:disabled) {
+  border-color: rgba(255, 51, 102, 0.6);
+  background: rgba(255, 51, 102, 0.08);
+}
+.btn-choice-red.active {
+  border-color: #ff3366;
+  background: rgba(255, 51, 102, 0.18);
+  box-shadow: 0 0 20px rgba(255, 51, 102, 0.45);
+}
+
+.btn-choice-black .choice-label { color: #cbd5e1; }
+.btn-choice-black:hover:not(:disabled) {
+  border-color: rgba(203, 213, 225, 0.5);
+  background: rgba(203, 213, 225, 0.06);
+}
+.btn-choice-black.active {
+  border-color: #cbd5e1;
+  background: rgba(203, 213, 225, 0.14);
+  box-shadow: 0 0 20px rgba(203, 213, 225, 0.35);
+}
+
+.btn-choice-green .choice-label { color: #00ff88; }
+.btn-choice-green:hover:not(:disabled) {
+  border-color: rgba(0, 255, 136, 0.6);
+  background: rgba(0, 255, 136, 0.08);
+}
+.btn-choice-green.active {
+  border-color: #00ff88;
+  background: rgba(0, 255, 136, 0.18);
+  box-shadow: 0 0 22px rgba(0, 255, 136, 0.5);
+}
+
+/* Stepper de Aposta da Roleta */
+.roulette-bet-stepper-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 4px 0 14px;
+}
+
+.stepper-label {
+  font-family: var(--font-sub);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.roulette-stepper {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: 30px;
+  padding: 3px;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.stepper-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-main);
+  font-size: 1.2rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stepper-btn:hover:not(:disabled) {
+  background: var(--neon-cyan);
+  color: #0b0e14;
+  box-shadow: 0 0 12px var(--neon-cyan);
+}
+
+.stepper-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.stepper-value-display {
+  min-width: 96px;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--neon-gold);
+  padding: 0 10px;
+}
+
+.stepper-quick-chips {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.chip-mini-btn {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-family: var(--font-sub);
+  font-weight: 700;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chip-mini-btn:hover:not(:disabled) {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+  background: rgba(0, 242, 254, 0.1);
+}
+
+.chip-mini-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
 
 /* ================= JOGO 4: HIGH / LOW ================= */
 .cards-arena {
@@ -2905,3 +3158,16 @@ body {
   .inf-games-nav { flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid rgba(176,87,255,0.15); }
   .inf-games-tab-list { flex-direction: row; }
 }
+
+@media (max-width: 480px) {
+  .roulette-wheel-container,
+  .wheel-outer-ring {
+    width: 310px;
+    height: 310px;
+  }
+  .roulette-color-choices {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
