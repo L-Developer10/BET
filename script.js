@@ -7,6 +7,7 @@
  * Dinheiro 100% Fictício — Sem transações reais ou dependências externas.
  */
 
+(function () {
 'use strict';
 
 /* ====================================================================
@@ -55,17 +56,20 @@ const CONFIG = {
       exato: { chance: 1 / 6, multiplicador: 5.50 }
     },
     roleta: {
-      // Segmentos da roleta da sorte (soma exata de 100%)
-      segmentos: [
-        { label: 'Perde Tudo', mult: 0.0, prob: 0.20, cor: '#ff3366', textoCor: '#ffffff' },
-        { label: 'x0.5', mult: 0.5, prob: 0.20, cor: '#ff9900', textoCor: '#ffffff' },
-        { label: 'x1.0', mult: 1.0, prob: 0.25, cor: '#4facfe', textoCor: '#ffffff' },
-        { label: 'x1.5', mult: 1.5, prob: 0.15, cor: '#00f2fe', textoCor: '#0b0e14' },
-        { label: 'x2.0', mult: 2.0, prob: 0.10, cor: '#00ff88', textoCor: '#0b0e14' },
-        { label: 'x3.0', mult: 3.0, prob: 0.05, cor: '#b057ff', textoCor: '#ffffff' },
-        { label: 'x5.0', mult: 5.0, prob: 0.03, cor: '#ff00ea', textoCor: '#ffffff' },
-        { label: 'x10.0', mult: 10.0, prob: 0.02, cor: '#ffd700', textoCor: '#0b0e14' }
-      ]
+      // Roleta Europeia Tradicional (37 caçapas: 0 a 36)
+      // 37 posições discretas com probabilidades idênticas (1/37 cada)
+      // Nenhuma porcentagem ou probabilidade exposta como variável
+      sequencia: Object.freeze([
+        0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10,
+        5, 24, 16, 33, 1, 20, 14, 31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26
+      ]),
+      vermelhos: Object.freeze(new Set([1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36])),
+      pretos: Object.freeze(new Set([2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35])),
+      multiplicadores: Object.freeze({
+        vermelho: 2.0,
+        preto: 2.0,
+        verde: 36.0
+      })
     },
     highlow: {
       padrao: { multiplicador: 1.80 },
@@ -115,7 +119,14 @@ const estado = {
   subjogos: {
     moeda: { escolha: 'cara' },
     dados: { tipo: 'baixo', numeroExato: 1 },
-    roleta: { anguloAtual: 0, girando: false },
+    roleta: {
+      anguloAtual: 0,
+      girando: false,
+      apostaCor: 'vermelho',
+      apostaValor: 100,
+      ultimoNumero: null,
+      ultimaCor: null
+    },
     highlow: { modo: 'std', predicao: 'high', cartaAtual: null },
     minas: {
       ativo: false,
@@ -308,10 +319,10 @@ function validarProbabilidades() {
     valida = false;
   }
 
-  // 2. Roda da Sorte
-  const somaRoleta = CONFIG.jogos.roleta.segmentos.reduce((acc, seg) => acc + seg.prob, 0);
-  if (Math.abs(somaRoleta - 1.0) > 0.0001) {
-    console.error(`Validação: Soma das probabilidades da Roleta deve ser 100%. Atual: ${(somaRoleta * 100).toFixed(2)}%`);
+  // 2. Roleta Europeia (37 posições: 18 vermelhos, 18 pretos, 1 zero verde)
+  const seqRoleta = CONFIG.jogos.roleta.sequencia;
+  if (!seqRoleta || seqRoleta.length !== 37 || CONFIG.jogos.roleta.vermelhos.size !== 18 || CONFIG.jogos.roleta.pretos.size !== 18 || seqRoleta[0] !== 0) {
+    console.error('Validação: Integridade estrutural da Roleta Europeia inválida.');
     valida = false;
   }
 
@@ -853,10 +864,36 @@ function obterValorAposta() {
 }
 
 /**
+ * Validação de integridade do estado e saldo
+ */
+function validarIntegridadeEstado() {
+  if (typeof estado.saldo !== 'number' || isNaN(estado.saldo) || !isFinite(estado.saldo) || estado.saldo < 0) {
+    notificarTentativaManipulacao('Saldo financeiro com valor inconsistente ou corrompido.');
+    return false;
+  }
+  return true;
+}
+
+function notificarTentativaManipulacao(motivo) {
+  console.warn('🚨 TENTATIVA DE MANIPULAÇÃO DETECTADA:', motivo);
+  const toast = document.getElementById('round-feedback-toast');
+  if (toast) {
+    toast.className = 'round-feedback-toast active';
+    toast.style.borderColor = '#ff3366';
+    toast.style.background = 'rgba(255, 51, 102, 0.2)';
+    const textEl = document.getElementById('feedback-text');
+    if (textEl) textEl.textContent = '🚨 TENTATIVA DE MANIPULAÇÃO DETECTADA - Operação rejeitada.';
+    setTimeout(() => toast.classList.remove('active'), 3500);
+  }
+}
+
+/**
  * Processa o débito da aposta e atualiza as estatísticas
  */
 function debitarAposta(valor) {
-  if (valor > estado.saldo || valor <= 0) return false;
+  if (!validarIntegridadeEstado()) return false;
+  if (typeof valor !== 'number' || isNaN(valor) || !isFinite(valor) || valor <= 0) return false;
+  if (valor > estado.saldo) return false;
 
   estado.saldo -= valor;
   estado.estatisticas.totalApostado += valor;
@@ -1038,114 +1075,329 @@ function jogarDados() {
   }, 1400);
 }
 
-/* ---------------- JOGO 3: RODA DA SORTE (CANVAS) ---------------- */
+/* ---------------- JOGO 3: ROLETA EUROPEIA (CANVAS & CRYPTO RNG) ---------------- */
+
+/**
+ * Realiza sorteio com entropia criptográfica segura e amostragem por rejeição
+ * para garantir probabilidade uniforme idêntica em todas as 37 posições (sem viés de módulo).
+ */
+function sortearIndiceRoleta() {
+  const buffer = new Uint32Array(1);
+  const divisor = 37;
+  const maxUniforme = Math.floor(0x100000000 / divisor) * divisor;
+  let val;
+  do {
+    window.crypto.getRandomValues(buffer);
+    val = buffer[0];
+  } while (val >= maxUniforme);
+  return val % divisor;
+}
+
+/**
+ * Resolve a cor oficial de um número na Roleta Europeia
+ */
+function resolverCorRoleta(numero) {
+  if (numero === 0) return 'verde';
+  if (CONFIG.jogos.roleta.vermelhos.has(numero)) return 'vermelho';
+  return 'preto';
+}
+
+/**
+ * Renderiza o visual rico e realista da Roleta Europeia no canvas
+ */
+function desenharRoletaNoCanvas(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const cx = w / 2;
+  const cy = h / 2;
+  const rExt = cx - 6;
+  const seq = CONFIG.jogos.roleta.sequencia;
+  const total = seq.length; // 37
+  const arc = (2 * Math.PI) / total;
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Aro externo de madeira nobre e latão polido
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, rExt, 0, Math.PI * 2);
+  const aroGrad = ctx.createRadialGradient(cx, cy, rExt * 0.7, cx, cy, rExt);
+  aroGrad.addColorStop(0, '#2e1509');
+  aroGrad.addColorStop(0.85, '#190a04');
+  aroGrad.addColorStop(1, '#0c0502');
+  ctx.fillStyle = aroGrad;
+  ctx.fill();
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#d4af37';
+  ctx.stroke();
+  ctx.restore();
+
+  // Pista das 37 caçapas
+  const rSlots = rExt - 8;
+  const rInterno = rSlots * 0.63;
+
+  seq.forEach((num, i) => {
+    const startAngle = i * arc;
+    const endAngle = startAngle + arc;
+    const cor = resolverCorRoleta(num);
+
+    let corFundo = '#121722'; // preto
+    if (cor === 'vermelho') corFundo = '#b91c1c';
+    else if (cor === 'verde') corFundo = '#059669';
+
+    // Fatias
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, rSlots, startAngle, endAngle);
+    ctx.closePath();
+    ctx.fillStyle = corFundo;
+    ctx.fill();
+
+    // Divisores metálicos dourados entre caçapas
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Numeração em alta nitidez orientada radialmente
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(startAngle + arc / 2);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Rajdhani, Orbitron, sans-serif';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(num.toString(), rSlots - 8, 0);
+    ctx.restore();
+  });
+
+  // Pista interna da bola (madeira escura polida com gradiente radial)
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, rInterno, 0, Math.PI * 2);
+  const pistaGrad = ctx.createRadialGradient(cx, cy, rInterno * 0.3, cx, cy, rInterno);
+  pistaGrad.addColorStop(0, '#1c1008');
+  pistaGrad.addColorStop(0.65, '#2e180d');
+  pistaGrad.addColorStop(1, '#0e0703');
+  ctx.fillStyle = pistaGrad;
+  ctx.fill();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#d4af37';
+  ctx.stroke();
+
+  // Torre central / Eixo cromado e dourado
+  const rTorre = rInterno * 0.42;
+  ctx.beginPath();
+  ctx.arc(cx, cy, rTorre, 0, Math.PI * 2);
+  const torreGrad = ctx.createRadialGradient(cx - 6, cy - 6, 2, cx, cy, rTorre);
+  torreGrad.addColorStop(0, '#fff4b8');
+  torreGrad.addColorStop(0.35, '#d4af37');
+  torreGrad.addColorStop(0.7, '#8b6914');
+  torreGrad.addColorStop(1, '#2d2004');
+  ctx.fillStyle = torreGrad;
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#fff0a0';
+  ctx.stroke();
+
+  // Detalhes da cruzeta do eixo
+  ctx.beginPath();
+  ctx.arc(cx, cy, rTorre * 0.45, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a1204';
+  ctx.fill();
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 function desenharRoleta() {
   const canvas = document.getElementById('wheel-canvas');
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const segs = CONFIG.jogos.roleta.segmentos;
-  const total = segs.length;
-  const arc = (2 * Math.PI) / total;
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const r = cx - 8;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  segs.forEach((seg, i) => {
-    const angulo = i * arc;
-    ctx.beginPath();
-    ctx.fillStyle = seg.cor;
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, angulo, angulo + arc);
-    ctx.lineTo(cx, cy);
-    ctx.fill();
-    ctx.strokeStyle = '#0e1320';
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // Texto
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angulo + arc / 2);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = seg.textoCor;
-    ctx.font = 'bold 15px Orbitron, sans-serif';
-    ctx.fillText(seg.label, r - 20, 5);
-    ctx.restore();
-  });
+  desenharRoletaNoCanvas(canvas);
 }
 
 function jogarRoleta() {
-  if (estado.emProcessamento) return;
-  const aposta = obterValorAposta();
-  if (aposta <= 0 || aposta > estado.saldo) return;
+  if (!validarIntegridadeEstado()) return;
+  if (estado.emProcessamento || estado.subjogos.roleta.girando) return;
 
+  const apostaValor = estado.subjogos.roleta.apostaValor || 100;
+  if (apostaValor <= 0 || apostaValor > estado.saldo) {
+    audio.tocarSom('derrota');
+    const toast = document.getElementById('round-feedback-toast');
+    if (toast) {
+      toast.className = 'round-feedback-toast active';
+      const textEl = document.getElementById('feedback-text');
+      if (textEl) textEl.textContent = 'VALOR DE APOSTA INVÁLIDO OU SALDO INSUFICIENTE!';
+      setTimeout(() => toast.classList.remove('active'), 2500);
+    }
+    return;
+  }
+
+  const corEscolhida = estado.subjogos.roleta.apostaCor || 'vermelho';
+  if (!['vermelho', 'preto', 'verde'].includes(corEscolhida)) {
+    return;
+  }
+
+  // Trava cliques durante o processamento da rodada
   estado.emProcessamento = true;
-  debitarAposta(aposta);
+  estado.subjogos.roleta.girando = true;
 
   const canvas = document.getElementById('wheel-canvas');
   const labelEl = document.getElementById('wheel-result-label');
+  const numDrawnEl = document.getElementById('roulette-num-drawn');
+  const colDrawnEl = document.getElementById('roulette-color-drawn');
   const btnPlay = document.getElementById('btn-play-roleta');
   if (btnPlay) btnPlay.disabled = true;
+  document.querySelectorAll('.roulette-choice-btn, .stepper-btn, .chip-mini-btn').forEach(b => b.disabled = true);
 
-  if (labelEl) labelEl.textContent = 'RODANDO A RODA DA SORTE...';
+  debitarAposta(apostaValor);
 
-  // Sorteio ponderado pelas probabilidades configuradas
-  const rand = Math.random();
-  let acumulado = 0;
-  let indiceSorteado = 0;
-  const segs = CONFIG.jogos.roleta.segmentos;
-
-  for (let i = 0; i < segs.length; i++) {
-    acumulado += segs[i].prob;
-    if (rand <= acumulado) {
-      indiceSorteado = i;
-      break;
-    }
+  if (labelEl) labelEl.textContent = 'A BOLA ESTÁ GIRANDO NA ROLETA EUROPEIA...';
+  if (colDrawnEl) colDrawnEl.textContent = 'GIRANDO...';
+  if (numDrawnEl) {
+    numDrawnEl.textContent = '...';
+    numDrawnEl.className = 'roulette-num-drawn';
   }
 
-  const numSegmentos = segs.length;
-  const anguloPorSegmento = 360 / numSegmentos;
-  // O ponteiro fica no topo (270 graus ou -90 graus)
-  const anguloAlvo = (360 - (indiceSorteado * anguloPorSegmento + anguloPorSegmento / 2) + 270) % 360;
-  const voltasCompletas = 5 * 360; // 5 voltas
-  const anguloFinal = voltasCompletas + anguloAlvo;
+  // SORTEIO CRIPTOGRAFICAMENTE SEGURO (Pre-drawn outcome)
+  const indiceSorteado = sortearIndiceRoleta(); // 0 a 36 com distribuição uniforme
+  const seq = CONFIG.jogos.roleta.sequencia;
+  const numeroSorteado = seq[indiceSorteado];
+  const corSorteada = resolverCorRoleta(numeroSorteado);
 
-  let tickInterval = setInterval(() => {
+  // Cálculo de rotação para alinhamento milimétrico com o ponteiro superior (270°)
+  const sliceDeg = 360 / 37;
+  const sliceCenterDeg = (indiceSorteado + 0.5) * sliceDeg;
+  const targetAngle = ((270 - sliceCenterDeg) % 360 + 360) % 360;
+  const curNorm = estado.subjogos.roleta.anguloAtual % 360;
+  let delta = (targetAngle - curNorm) % 360;
+  if (delta <= 0) delta += 360;
+  const fullSpins = (5 + Math.floor(Math.random() * 2)) * 360;
+  const anguloFinal = estado.subjogos.roleta.anguloAtual + fullSpins + delta;
+  estado.subjogos.roleta.anguloAtual = anguloFinal;
+
+  let ticks = 0;
+  const tickInterval = setInterval(() => {
     audio.tocarSom('tick');
-  }, 180);
+    ticks++;
+    if (ticks > 24) clearInterval(tickInterval);
+  }, 170);
 
   if (canvas) {
-    canvas.style.transition = 'transform 4.5s cubic-bezier(0.15, 0.9, 0.2, 1)';
+    canvas.style.transition = 'transform 4.5s cubic-bezier(0.12, 0.85, 0.18, 1)';
     canvas.style.transform = `rotate(${anguloFinal}deg)`;
   }
 
   setTimeout(() => {
     clearInterval(tickInterval);
-    const resultado = segs[indiceSorteado];
-    const mult = resultado.mult;
 
-    if (mult > 0) {
-      const ganho = Math.round(aposta * mult);
-      if (labelEl) labelEl.innerHTML = `PAROU EM: <strong class="neon-green">${resultado.label}</strong>!`;
-      creditarVitoria(ganho, mult, 'Roda da Sorte', aposta);
-    } else {
-      if (labelEl) labelEl.innerHTML = `PAROU EM: <strong class="neon-red">${resultado.label}</strong>!`;
-      registrarDerrota('Roda da Sorte', aposta, 0);
+    const venceu = (corEscolhida === corSorteada);
+    const mult = CONFIG.jogos.roleta.multiplicadores[corEscolhida] || 2.0;
+    const nomeCorPt = corSorteada.toUpperCase();
+
+    if (numDrawnEl) {
+      numDrawnEl.textContent = numeroSorteado;
+      numDrawnEl.className = `roulette-num-drawn num-${corSorteada}`;
+    }
+    if (colDrawnEl) {
+      colDrawnEl.textContent = nomeCorPt;
     }
 
-    if (btnPlay) btnPlay.disabled = false;
+    if (venceu) {
+      const ganho = Math.round(apostaValor * mult);
+      if (labelEl) {
+        labelEl.innerHTML = `PAROU EM <strong class="neon-${corSorteada === 'verde' ? 'green' : (corSorteada === 'vermelho' ? 'red' : 'gold')}">${numeroSorteado} (${nomeCorPt})</strong>! VOCÊ GANHOU +R$ ${ganho.toLocaleString('pt-BR')} (x${mult.toFixed(2)})`;
+      }
+      creditarVitoria(ganho, mult, `Roleta Europeia (${nomeCorPt})`, apostaValor);
+    } else {
+      if (labelEl) {
+        labelEl.innerHTML = `PAROU EM <strong class="neon-${corSorteada === 'verde' ? 'green' : (corSorteada === 'vermelho' ? 'red' : 'gold')}">${numeroSorteado} (${nomeCorPt})</strong>! VOCÊ PERDEU R$ ${apostaValor.toLocaleString('pt-BR')}`;
+      }
+      registrarDerrota(`Roleta Europeia (${nomeCorPt})`, apostaValor, 0);
+    }
+
+    estado.subjogos.roleta.ultimoNumero = numeroSorteado;
+    estado.subjogos.roleta.ultimaCor = corSorteada;
+    estado.subjogos.roleta.girando = false;
     estado.emProcessamento = false;
 
-    // Reseta rotação para próximas rodadas sem salto visual
-    setTimeout(() => {
-      if (canvas) {
-        canvas.style.transition = 'none';
-        canvas.style.transform = `rotate(${anguloAlvo}deg)`;
+    if (btnPlay) btnPlay.disabled = false;
+    document.querySelectorAll('.roulette-choice-btn, .stepper-btn, .chip-mini-btn').forEach(b => b.disabled = false);
+    atualizarInterface();
+  }, 4600);
+}
+
+function configurarEventosRoleta() {
+  const botoesCor = document.querySelectorAll('.roulette-choice-btn');
+  botoesCor.forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (estado.emProcessamento || estado.subjogos.roleta.girando) return;
+      audio.tocarSom('click');
+      const cor = btn.dataset.color;
+      estado.subjogos.roleta.apostaCor = cor;
+      botoesCor.forEach(b => b.classList.toggle('active', b === btn));
+    });
+  });
+
+  const displayStepper = document.getElementById('roulette-bet-display');
+  const inputGlobal = document.getElementById('input-bet-amount');
+
+  function atualizarDisplayApostaRoleta(novoValor) {
+    novoValor = Math.max(1, Math.min(estado.saldo || 1, novoValor));
+    estado.subjogos.roleta.apostaValor = novoValor;
+    if (displayStepper) displayStepper.textContent = `R$ ${novoValor.toLocaleString('pt-BR')}`;
+    if (inputGlobal) {
+      inputGlobal.value = novoValor;
+      atualizarBadgePercentualAposta();
+    }
+  }
+
+  document.getElementById('btn-roulette-bet-minus')?.addEventListener('click', () => {
+    if (estado.emProcessamento || estado.subjogos.roleta.girando) return;
+    audio.tocarSom('click');
+    const atual = estado.subjogos.roleta.apostaValor || 100;
+    const step = atual > 500 ? 100 : (atual > 100 ? 50 : 25);
+    atualizarDisplayApostaRoleta(Math.max(1, atual - step));
+  });
+
+  document.getElementById('btn-roulette-bet-plus')?.addEventListener('click', () => {
+    if (estado.emProcessamento || estado.subjogos.roleta.girando) return;
+    audio.tocarSom('click');
+    const atual = estado.subjogos.roleta.apostaValor || 100;
+    const step = atual >= 500 ? 100 : (atual >= 100 ? 50 : 25);
+    atualizarDisplayApostaRoleta(atual + step);
+  });
+
+  document.querySelectorAll('.roulette-bet-stepper-row .chip-mini-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (estado.emProcessamento || estado.subjogos.roleta.girando) return;
+      audio.tocarSom('click');
+      const valStr = btn.dataset.val;
+      if (valStr === 'max') {
+        atualizarDisplayApostaRoleta(estado.saldo);
+      } else {
+        const val = Number(valStr);
+        atualizarDisplayApostaRoleta(val);
       }
-    }, 500);
-  }, 4500);
+    });
+  });
+
+  if (inputGlobal) {
+    inputGlobal.addEventListener('input', () => {
+      const v = Number(inputGlobal.value) || 0;
+      if (displayStepper && v > 0) {
+        displayStepper.textContent = `R$ ${v.toLocaleString('pt-BR')}`;
+        estado.subjogos.roleta.apostaValor = v;
+      }
+    });
+  }
+
+  document.getElementById('btn-play-roleta')?.addEventListener('click', jogarRoleta);
 }
 
 /* ---------------- JOGO 4: HIGH / LOW ---------------- */
@@ -2054,8 +2306,8 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   document.getElementById('btn-play-dados')?.addEventListener('click', jogarDados);
 
-  // ================= JOGO 3: ROLETA =================
-  document.getElementById('btn-play-roleta')?.addEventListener('click', jogarRoleta);
+  // ================= JOGO 3: ROLETA EUROPEIA =================
+  configurarEventosRoleta();
 
   // ================= JOGO 4: HIGH / LOW =================
   document.querySelectorAll('.mode-toggle-btn').forEach(btn => {
@@ -2249,7 +2501,14 @@ const modoInfinito = {
   subjogos: {
     moeda: { escolha: 'cara' },
     dados: { tipo: 'baixo', numeroExato: 1 },
-    roleta: { anguloAtual: 0, girando: false },
+    roleta: {
+      anguloAtual: 0,
+      girando: false,
+      apostaCor: 'vermelho',
+      apostaValor: 100,
+      ultimoNumero: null,
+      ultimaCor: null
+    },
     highlow: { modo: 'std', predicao: 'high', cartaAtual: null },
     minas: {
       ativo: false,
@@ -2558,43 +2817,11 @@ function infRenderizarJogoAtivo(nomeJogo) {
 }
 
 /**
- * Desenha a roda da sorte no canvas do clone
+ * Desenha a roleta no canvas do clone do modo infinito
  */
 function infDesenharRoleta(canvas) {
   if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const segs = CONFIG.jogos.roleta.segmentos;
-  const total = segs.reduce((a, s) => a + s.prob, 0);
-  const cx = canvas.width / 2;
-  const cy = canvas.height / 2;
-  const r  = cx - 10;
-  let angulo = modoInfinito.subjogos.roleta.anguloAtual || 0;
-
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  segs.forEach(seg => {
-    const fatia = (seg.prob / total) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, angulo, angulo + fatia);
-    ctx.closePath();
-    ctx.fillStyle = seg.cor;
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-
-    // Texto
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angulo + fatia / 2);
-    ctx.textAlign = 'right';
-    ctx.fillStyle = seg.textoCor;
-    ctx.font = `bold ${Math.max(10, r * 0.11)}px Orbitron`;
-    ctx.fillText(seg.label, r - 12, 5);
-    ctx.restore();
-
-    angulo += fatia;
-  });
+  desenharRoletaNoCanvas(canvas);
 }
 
 /**
@@ -2797,6 +3024,18 @@ function infBindarEventosClone(clone, nomeJogo) {
 
     case 'roleta': {
       const btnJogar = clone.querySelector('.btn-play-primary');
+      const botoesCor = clone.querySelectorAll('.roulette-choice-btn');
+      let corEscolhidaInf = 'vermelho';
+
+      botoesCor.forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (modoInfinito.subjogos.roleta.girando) return;
+          audio.tocarSom('click');
+          corEscolhidaInf = btn.dataset.color;
+          botoesCor.forEach(b => b.classList.toggle('active', b === btn));
+        });
+      });
+
       if (btnJogar) {
         btnJogar.addEventListener('click', () => {
           const aposta = getAposta();
@@ -2804,40 +3043,53 @@ function infBindarEventosClone(clone, nomeJogo) {
           if (modoInfinito.subjogos.roleta.girando) return;
           modoInfinito.subjogos.roleta.girando = true;
 
-          const segs = CONFIG.jogos.roleta.segmentos;
-          const rand = Math.random();
-          let acum = 0, segEscolhido = segs[segs.length - 1];
-          for (const s of segs) { acum += s.prob; if (rand < acum) { segEscolhido = s; break; } }
-
           const canvas = clone.querySelector('canvas');
-          const labelEl = clone.querySelector('[id^="inf2-wheel-result-label"]') || clone.querySelector('.wheel-result-label');
+          const labelEl = clone.querySelector('.wheel-result-label');
+          const numDrawnEl = clone.querySelector('.roulette-num-drawn');
+          const colDrawnEl = clone.querySelector('.roulette-color-drawn');
 
-          let vel = 0.25 + Math.random() * 0.15;
-          let ang = modoInfinito.subjogos.roleta.anguloAtual;
-          const duracao = 4000 + Math.random() * 2000;
-          const tInicio = performance.now();
+          const indiceSorteado = sortearIndiceRoleta();
+          const seq = CONFIG.jogos.roleta.sequencia;
+          const numeroSorteado = seq[indiceSorteado];
+          const corSorteada = resolverCorRoleta(numeroSorteado);
 
-          function animarRoleta(agora) {
-            const decorrido = agora - tInicio;
-            const progress = Math.min(decorrido / duracao, 1);
-            const ease = 1 - Math.pow(1 - progress, 3);
-            ang += vel * (1 - ease * 0.95);
-            modoInfinito.subjogos.roleta.anguloAtual = ang;
-            infDesenharRoleta(canvas);
-            if (progress < 1) {
-              requestAnimationFrame(animarRoleta);
-            } else {
-              modoInfinito.subjogos.roleta.girando = false;
-              if (labelEl) labelEl.textContent = `Resultado: ${segEscolhido.label}`;
-              if (segEscolhido.mult > 0) {
-                creditar(Math.floor(aposta * segEscolhido.mult), segEscolhido.mult, 'Roda da Sorte', aposta);
-              } else {
-                perder('Roda da Sorte', aposta, 0);
-                if (labelEl) labelEl.textContent = `PERDE TUDO! 💀`;
-              }
-            }
+          const sliceDeg = 360 / 37;
+          const sliceCenterDeg = (indiceSorteado + 0.5) * sliceDeg;
+          const targetAngle = ((270 - sliceCenterDeg) % 360 + 360) % 360;
+          const curNorm = (modoInfinito.subjogos.roleta.anguloAtual || 0) % 360;
+          let delta = (targetAngle - curNorm) % 360;
+          if (delta <= 0) delta += 360;
+          const anguloFinal = (modoInfinito.subjogos.roleta.anguloAtual || 0) + 1800 + delta;
+          modoInfinito.subjogos.roleta.anguloAtual = anguloFinal;
+
+          if (canvas) {
+            canvas.style.transition = 'transform 4s cubic-bezier(0.12, 0.85, 0.18, 1)';
+            canvas.style.transform = `rotate(${anguloFinal}deg)`;
           }
-          requestAnimationFrame(animarRoleta);
+
+          if (labelEl) labelEl.textContent = 'GIRANDO ROLETA EUROPEIA...';
+
+          setTimeout(() => {
+            modoInfinito.subjogos.roleta.girando = false;
+            const venceu = (corEscolhidaInf === corSorteada);
+            const mult = CONFIG.jogos.roleta.multiplicadores[corEscolhidaInf] || 2.0;
+            const nomeCorPt = corSorteada.toUpperCase();
+
+            if (numDrawnEl) {
+              numDrawnEl.textContent = numeroSorteado;
+              numDrawnEl.className = `roulette-num-drawn num-${corSorteada}`;
+            }
+            if (colDrawnEl) colDrawnEl.textContent = nomeCorPt;
+
+            if (venceu) {
+              const ganho = Math.floor(aposta * mult);
+              if (labelEl) labelEl.textContent = `PAROU EM ${numeroSorteado} (${nomeCorPt})! GANHOU +R$ ${ganho.toLocaleString('pt-BR')}`;
+              creditar(ganho, mult, `Roleta Europeia (${nomeCorPt})`, aposta);
+            } else {
+              if (labelEl) labelEl.textContent = `PAROU EM ${numeroSorteado} (${nomeCorPt})! PERDEU R$ ${aposta.toLocaleString('pt-BR')}`;
+              perder(`Roleta Europeia (${nomeCorPt})`, aposta, 0);
+            }
+          }, 4100);
         });
       }
       break;
@@ -3481,4 +3733,6 @@ document.addEventListener('DOMContentLoaded', () => {
     atualizarBadgePercentualAposta();
   });
 });
+
+})();
 
