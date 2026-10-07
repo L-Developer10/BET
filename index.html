@@ -143,12 +143,12 @@
             <span class="tab-badge" id="badge-dados">🔒 DIA 2</span>
           </button>
 
-          <!-- JOGO 3: RODA DA SORTE -->
+          <!-- JOGO 3: ROLETA EUROPEIA -->
           <button class="game-tab-btn" data-game="roleta" id="tab-roleta">
-            <span class="tab-icon">🎡</span>
+            <span class="tab-icon">🎰</span>
             <div class="tab-info">
-              <span class="tab-name">Roda da Sorte</span>
-              <span class="tab-unlock">Dia 4 • Até x10.0</span>
+              <span class="tab-name">Roleta Europeia</span>
+              <span class="tab-unlock">Dia 4 • Até x36.0</span>
             </div>
             <span class="tab-badge" id="badge-roleta">🔒 DIA 4</span>
           </button>
@@ -361,40 +361,57 @@
             </div>
           </div>
 
-          <!-- ================= JOGO 3: RODA DA SORTE ================= -->
+          <!-- ================= JOGO 3: ROLETA EUROPEIA ================= -->
           <div class="game-screen" id="game-roleta">
             <div class="game-header-bar">
-              <h2>🎡 RODA DA SORTE</h2>
-              <span class="game-meta-badge">Multiplicadores de <strong>x0.0 até x10.0</strong></span>
+              <h2>🎰 ROLETA EUROPEIA</h2>
+              <span class="game-meta-badge">Vermelho/Preto: <strong>x2.00</strong> • Verde (0): <strong>x36.00</strong></span>
             </div>
 
-            <div class="wheel-arena">
-              <div class="wheel-outer-ring">
-                <div class="wheel-flapper">▼</div>
-                <canvas id="wheel-canvas" width="380" height="380"></canvas>
-                <div class="wheel-center-hub">
-                  <span class="hub-icon">💎</span>
+            <div class="roulette-arena">
+              <div class="roulette-wheel-container">
+                <div class="roulette-pointer-marker" aria-hidden="true">▼</div>
+                <canvas id="wheel-canvas" width="400" height="400"></canvas>
+                <div class="roulette-center-turret" aria-hidden="true">
+                  <span class="turret-icon">✦</span>
                 </div>
               </div>
-              <div class="wheel-result-label" id="wheel-result-label">GIRE A RODA PARA MULTIPLICAR SEU SALDO</div>
+
+              <!-- RESULTADO E STATUS -->
+              <div class="roulette-display-panel">
+                <div class="roulette-result-badge" id="roulette-result-badge">
+                  <span class="roulette-color-drawn" id="roulette-color-drawn">FAÇA SUA APOSTA</span>
+                </div>
+                <div class="wheel-result-label" id="wheel-result-label">ESCOLHA UMA COR E GIRE A ROLETA</div>
+              </div>
             </div>
 
-            <!-- TABELA DE PROBABILIDADES DA RODA -->
-            <div class="wheel-odds-legend">
-              <div class="odd-pill bad"><span>💀 Perde Tudo</span> <b>20%</b></div>
-              <div class="odd-pill low"><span>x0.5</span> <b>20%</b></div>
-              <div class="odd-pill mid"><span>x1.0</span> <b>25%</b></div>
-              <div class="odd-pill mid"><span>x1.5</span> <b>15%</b></div>
-              <div class="odd-pill good"><span>x2.0</span> <b>10%</b></div>
-              <div class="odd-pill epic"><span>x3.0</span> <b>5%</b></div>
-              <div class="odd-pill mythic"><span>x5.0</span> <b>3%</b></div>
-              <div class="odd-pill jackpot"><span>🌟 x10.0</span> <b>2%</b></div>
+            <!-- CONTROLES DE APOSTA: CORES -->
+            <div class="roulette-color-choices">
+              <button class="roulette-choice-btn btn-choice-red active" data-color="vermelho" id="btn-roulette-red" type="button">
+                <span class="choice-indicator-dot red"></span>
+                <span class="choice-label">🔴 VERMELHO</span>
+                <span class="choice-payout">x2.00 • 18 Casas</span>
+              </button>
+              <button class="roulette-choice-btn btn-choice-black" data-color="preto" id="btn-roulette-black" type="button">
+                <span class="choice-indicator-dot black"></span>
+                <span class="choice-label">⚫ PRETO</span>
+                <span class="choice-payout">x2.00 • 18 Casas</span>
+              </button>
+              <button class="roulette-choice-btn btn-choice-green" data-color="verde" id="btn-roulette-green" type="button">
+                <span class="choice-indicator-dot green"></span>
+                <span class="choice-label">🟢 VERDE (0)</span>
+                <span class="choice-payout">x36.00 • 1 Casa</span>
+              </button>
             </div>
 
+
+
+            <!-- BOTÃO PRINCIPAL -->
             <div class="game-action-row">
               <button class="btn-play-primary" id="btn-play-roleta">
-                <span>GIRAR RODA</span>
-                <span class="play-action-icon">🎡</span>
+                <span>GIRAR ROLETA</span>
+                <span class="play-action-icon">🎰</span>
               </button>
             </div>
           </div>
@@ -973,10 +990,10 @@
             <span class="tab-badge free">LIVRE</span>
           </button>
           <button class="inf-game-tab" data-inf-game="roleta" id="inf-tab-roleta">
-            <span class="tab-icon">🎡</span>
+            <span class="tab-icon">🎰</span>
             <div class="tab-info">
-              <span class="tab-name">Roda da Sorte</span>
-              <span class="tab-unlock">Até x10.0</span>
+              <span class="tab-name">Roleta Europeia</span>
+              <span class="tab-unlock">Até x36.0</span>
             </div>
             <span class="tab-badge free">LIVRE</span>
           </button>
